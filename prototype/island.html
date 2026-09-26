@@ -337,7 +337,7 @@ const I={
   link:sv('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>')
 };
 const ring=(pct,size,c)=>`<svg class="ring" width="${size}" height="${size}" viewBox="0 0 20 20" style="--c:${c||'#FF9F0A'}"><circle class="trk" cx="10" cy="10" r="8"/><circle class="v js-ring" cx="10" cy="10" r="8" pathLength="100" style="stroke-dashoffset:${100-pct}"/></svg>`;
-const think=(c,lg)=>`<div class="think ${lg?'lg':''}" style="--c:${c}"><i></i><i></i><i></i></div>`;
+const think=(app,lg)=>{const px=lg?40:20;return `<canvas class="ail" data-k="${app==='claude'?'claude':'openai'}" data-c="${AI_COLOR[app]}" width="${px*2}" height="${px*2}" style="width:${px}px;height:${px}px;flex:none"></canvas>`};
 const fmt=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -390,7 +390,7 @@ const TRACKS=[
   {title:'Blinding Lights',artist:'The Weeknd',dur:202,art:'linear-gradient(135deg,#ee0979,#2b1055)'}
 ];
 const trk=()=>TRACKS[S.media.idx];
-const AI_COLOR={claude:'#D97757',chatgpt:'#10A37F'};
+const AI_COLOR={claude:'#D97757',chatgpt:'#FFFFFF'};
 
 /* ---------- the desktop ---------- */
 function renderDesktop(){
@@ -426,7 +426,7 @@ const CV={
   download:()=>({kind:'dl-c',sig:'',w:150,h:34,r:17,
     html:`<div class="row compact"><div class="ic" style="color:#0A84FF">${I.down}</div><div class="grow"></div><span class="lbl tnum js-dlpct">${Math.floor(S.dl.pct)}%</span></div>`}),
   ai:()=>{const c=AI_COLOR[S.ai.app];return{kind:'ai-c',sig:S.ai.app,w:190,h:34,r:17,
-    html:`<div class="row compact">${think(c)}<div class="grow"></div><span class="lbl" style="color:${c}">${APPS[S.ai.app].name}</span></div>`}}
+    html:`<div class="row compact">${think(S.ai.app)}<div class="grow"></div><span class="lbl" style="color:${c}">${APPS[S.ai.app].name}</span></div>`}}
 };
 const EV={
   media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:m.idx+'|'+m.playing,w:366,h:166,r:34,
@@ -440,7 +440,7 @@ const EV={
     html:`<div class="row"><div class="ic" style="color:#0A84FF;width:22px;height:22px">${I.down}</div><div class="grow"><div class="t1">CN_Unit3_Notes.pdf</div><div class="t2 tnum js-dlmb">${(18.4*S.dl.pct/100).toFixed(1)} of 18.4 MB · Chrome</div></div><button class="pb sm" data-a="jump">Show</button></div>
     <div class="bar"><i class="js-dlbar" style="width:${S.dl.pct}%;background:#0A84FF"></i></div>`}),
   ai:()=>{const c=AI_COLOR[S.ai.app];return{kind:'ai-e',sig:S.ai.app,w:340,h:96,r:32,
-    html:`<div class="row">${think(c,1)}<div class="grow"><div class="t1">${APPS[S.ai.app].name} is working</div><div class="t2 tnum js-aitime">In another window · ${fmt((Date.now()-S.ai.since)/1000)}</div></div><button class="pb w sm" data-a="jump">Open</button></div>`}}
+    html:`<div class="row">${think(S.ai.app,1)}<div class="grow"><div class="t1">${APPS[S.ai.app].name} is working</div><div class="t2 tnum js-aitime">In another window · ${fmt((Date.now()-S.ai.since)/1000)}</div></div><button class="pb w sm" data-a="jump">Open</button></div>`}}
 };
 const pill=(w,inner,kind)=>({kind,sig:inner,w,h:40,r:20,html:`<div class="row compact">${inner}</div>`});
 const card=(w,h,html,kind)=>({kind,sig:html,w,h,r:Math.min(h/2,30),html});
@@ -604,6 +604,20 @@ function trig(a){
 }
 let clipI=0;
 function startFocus(){if(!S.f.focus)return;S.timer={left:S.focusMin*60,total:S.focusMin*60,running:true};startAct('timer',null)}
+
+/* ---------- AI loaders: Claude starburst and OpenAI knot, drawn every frame ---------- */
+const RAYS=[[0,.95],[26,.8],[53,1],[80,.84],[106,.96],[133,.78],[160,.98],[187,.82],[213,.94],[240,.8],[266,1],[293,.86],[320,.92],[346,.8]];
+function drawStar(g,R,t,col){g.save();g.translate(R,R);g.rotate(t*0.6);g.strokeStyle=col;g.lineCap='round';g.lineWidth=R*0.2;
+  RAYS.forEach(([a,l],i)=>{const k=0.72+0.28*(0.5+0.5*Math.sin(t*4.2+i*0.9));const r=a*Math.PI/180;
+    g.beginPath();g.moveTo(Math.cos(r)*R*0.12,Math.sin(r)*R*0.12);g.lineTo(Math.cos(r)*R*l*k*0.86,Math.sin(r)*R*l*k*0.86);g.stroke()});g.restore()}
+function drawKnot(g,R,t,col){g.save();g.translate(R,R);const s=0.86*(1+0.06*Math.sin(t*3));g.scale(s,s);g.rotate(t*2.4);
+  g.strokeStyle=col;g.lineWidth=R*0.12;g.lineJoin='round';const w=R*0.46,h=R*0.98;
+  for(let k=0;k<6;k++){g.save();g.rotate(k*Math.PI/3);g.beginPath();g.roundRect(-w/2+R*0.2,-h+R*0.1,w,h,w/2);g.stroke();g.restore()}g.restore()}
+const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function loop(ts){const t=still?0.3:ts/1000;
+  document.querySelectorAll('canvas.ail').forEach(cv=>{const g=cv.getContext('2d');const R=cv.width/2;g.clearRect(0,0,cv.width,cv.height);
+    (cv.dataset.k==='claude'?drawStar:drawKnot)(g,R,t,cv.dataset.c)});
+  requestAnimationFrame(loop)})(0);
 
 /* ---------- clocks ---------- */
 setInterval(()=>{
