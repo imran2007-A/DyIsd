@@ -4,49 +4,83 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Threading;
+using DyIsd.Controls;
 using DyIsd.Native;
+using DyIsd.Services;
 using DyIsd.Settings;
 using Microsoft.Win32;
 
 namespace DyIsd.Island;
 
 /// <summary>
-/// The see-through, always-on-top window at the top of the screen. It only draws and animates;
+/// The always-on-top window at the top of the screen. It only draws, animates and reports input;
 /// IslandController decides what to show.
+///
+/// How the mouse works:
+///  - Normally the island lets every click pass through to the app underneath (Chrome tabs etc.),
+///    and fades when your mouse is over it so you can see what's below.
+///  - Hold Alt over it and it turns solid and clickable: Alt+click jumps to the app,
+///    Alt+right-click expands it, Alt+drag moves it, Alt+scroll changes volume.
+///  - Once expanded it stays clickable until your mouse leaves it.
 /// </summary>
 public partial class IslandWindow : Window
 {
-    public event Action<bool>? HoverChanged;
-    public event Action? IslandClicked;
+    public event Action? Clicked;
+    public event Action? RightClicked;
     public event Action<string>? ActionClicked;
     public event Action<int, bool>? Wheel;
     public event Action<string>? Dropped;
-    public event Action? BubbleClicked;
+    /// <summary>True when the mouse enters the island, false when it leaves.</summary>
+    public event Action<bool>? HoverChanged;
 
-    const double WinWidth = 480, WinHeight = 250;
-    readonly IEasingFunction _spring = new BackEase { Amplitude = 0.28, EasingMode = EasingMode.EaseOut };
+    const double WinWidth = 420, WinHeight = 210, Gap = 14;
+    static readonly Brush AltBorder = ThemeService.Solid(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF));
+
+    readonly IEasingFunction _spring = new SpringEase();
     readonly IEasingFunction _smooth = new CubicEase { EasingMode = EasingMode.EaseOut };
+    readonly DispatcherTimer _track = new() { Interval = TimeSpan.FromMilliseconds(30) };
     string? _templateKey, _logicalKind;
-    bool _shown, _bubbleShown;
+    bool _shown, _hover, _interactive = true, _ghost;
+    string _pos = "center";
+
+    /// <summary>Set by the controller while the island is expanded: stays clickable without Alt.</summary>
+    public bool Expanded { get; set; }
 
     public IslandWindow()
     {
         InitializeComponent();
         Width = WinWidth;
         Height = WinHeight;
-        SourceInitialized += (_, _) => MakeToolWindow();
+        SourceInitialized += (_, _) =>
+        {
+            SetExStyle(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, true);
+            SetInteractive(false);
+        };
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => ApplyPosition(SettingsStore.Current.Position));
+        _track.Tick += (_, _) => Track();
         ApplyPosition(SettingsStore.Current.Position);
     }
 
-    /// <summary>No taskbar button, no Alt+Tab entry, and clicking it doesn't steal focus from your app.</summary>
-    void MakeToolWindow()
+    // ---------- window styles ----------
+
+    void SetExStyle(long flags, bool on)
     {
         var h = new WindowInteropHelper(this).Handle;
+        if (h == IntPtr.Zero) return;
         long ex = (long)Win32.GetWindowLongPtr(h, Win32.GWL_EXSTYLE);
-        ex |= Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE;
-        ex &= ~Win32.WS_EX_APPWINDOW;
+        ex = on ? ex | flags : ex & ~flags;
+        if (flags == (Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE)) ex &= ~Win32.WS_EX_APPWINDOW;
         Win32.SetWindowLongPtr(h, Win32.GWL_EXSTYLE, (IntPtr)ex);
+    }
+
+    /// <summary>Clickable, or clicks fall through to the window underneath.</summary>
+    void SetInteractive(bool on)
+    {
+        if (on == _interactive) return;
+        _interactive = on;
+        SetExStyle(Win32.WS_EX_TRANSPARENT, !on);
     }
 
     void EnsureTopmost()
@@ -56,9 +90,11 @@ public partial class IslandWindow : Window
             Win32.SetWindowPos(h, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
     }
 
-    /// <summary>Moves the window to the top-left, top-center or top-right of the main screen.</summary>
+    // ---------- position ----------
+
     public void ApplyPosition(string pos)
     {
+        _pos = pos;
         var wa = SystemParameters.WorkArea;
         Top = wa.Top;
         Left = pos switch
@@ -67,31 +103,45 @@ public partial class IslandWindow : Window
             "right" => wa.Right - WinWidth,
             _ => wa.Left + (wa.Width - WinWidth) / 2,
         };
-
         var align = pos switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
-        Row.HorizontalAlignment = align;
+        Pill.HorizontalAlignment = align;
         Presenter.HorizontalAlignment = align;
-        // On the right side, the island grows leftward and the second bubble sits to its left.
-        Row.FlowDirection = pos == "right" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        PrivacyDot.HorizontalAlignment = align;
         Pill.RenderTransformOrigin = new Point(pos == "left" ? 0 : pos == "right" ? 1 : 0.5, 0);
         // Compact views mirror on the right so the album art hugs the screen edge.
         Resources["CompactFlow"] = pos == "right" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
     }
 
+    /// <summary>Where the Control Center should appear: under the island, same side.</summary>
+    public Rect IslandArea => new(Left, Top, WinWidth, WinHeight);
+
+    // ---------- animation ----------
+
     int Ms(int ms) => SystemParameters.ClientAreaAnimation ? ms : 0; // respects "Animation effects: off"
 
-    void Animate(IAnimatable target, DependencyProperty dp, double to, int ms = 480, IEasingFunction? ease = null) =>
+    void Animate(IAnimatable target, DependencyProperty dp, double to, int ms = 560, IEasingFunction? ease = null) =>
         target.BeginAnimation(dp, new DoubleAnimation(to, TimeSpan.FromMilliseconds(Ms(ms))) { EasingFunction = ease ?? _spring });
 
-    /// <summary>Shows a view. Same logical kind updates in place; a new kind fades in.</summary>
+    /// <summary>Content fades in from slightly blurred, like the iPhone island.</summary>
+    void BlurIn()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+        var blur = new BlurEffect { Radius = 8, RenderingBias = RenderingBias.Performance };
+        Presenter.Effect = blur;
+        var a = new DoubleAnimation(0, TimeSpan.FromMilliseconds(320)) { EasingFunction = _smooth };
+        a.Completed += (_, _) => { if (Presenter.Effect == blur) Presenter.Effect = null; }; // crisp text once settled
+        blur.BeginAnimation(BlurEffect.RadiusProperty, a);
+        Presenter.Opacity = 0;
+        Animate(Presenter, OpacityProperty, 1, 260, _smooth);
+    }
+
     public void ShowView(string templateKey, string logicalKind, object data, double width, double height)
     {
         if (templateKey != _templateKey || logicalKind != _logicalKind)
         {
             Presenter.ContentTemplate = (DataTemplate)Resources[templateKey];
             Presenter.Content = data;
-            Presenter.Opacity = 0;
-            Animate(Presenter, OpacityProperty, 1, 260, _smooth);
+            BlurIn();
             _templateKey = templateKey;
             _logicalKind = logicalKind;
         }
@@ -111,11 +161,11 @@ public partial class IslandWindow : Window
             Pill.BeginAnimation(HeightProperty, null);
             Pill.Width = width;
             Pill.Height = height;
-            Pill.IsHitTestVisible = true;
             EnsureTopmost();
-            Animate(Pill, OpacityProperty, 1, 220, _smooth);
+            Animate(Pill, OpacityProperty, _ghost ? 0.28 : 1, 200, _smooth);
             Animate(PillScale, ScaleTransform.ScaleXProperty, 1);
             Animate(PillScale, ScaleTransform.ScaleYProperty, 1);
+            _track.Start();
             return;
         }
 
@@ -128,31 +178,72 @@ public partial class IslandWindow : Window
         if (!_shown) return;
         _shown = false;
         _templateKey = _logicalKind = null;
-        Pill.IsHitTestVisible = false;
-        Animate(Pill, OpacityProperty, 0, 220, _smooth);
-        Animate(PillScale, ScaleTransform.ScaleXProperty, 0.6, 260, _smooth);
-        Animate(PillScale, ScaleTransform.ScaleYProperty, 0.6, 260, _smooth);
-        SetBubble(null, null);
+        Expanded = false;
+        Animate(Pill, OpacityProperty, 0, 200, _smooth);
+        Animate(PillScale, ScaleTransform.ScaleXProperty, 0.5, 260, _smooth);
+        Animate(PillScale, ScaleTransform.ScaleYProperty, 0.5, 260, _smooth);
+        _track.Stop();
+        SetInteractive(false);
+        if (_hover)
+        {
+            _hover = false;
+            HoverChanged?.Invoke(false);
+        }
     }
 
-    /// <summary>The small circle next to the island when two things are running.</summary>
-    public void SetBubble(string? kind, object? data)
+    /// <summary>
+    /// The iPhone-style dot. brush = orange for mic, green for camera, null to hide.
+    /// pillWidth = width of the island next to it, or null when the island is hidden.
+    /// </summary>
+    public void SetPrivacyDot(Brush? brush, double? pillWidth)
     {
-        if (kind == null)
+        if (brush == null)
         {
-            if (!_bubbleShown) return;
-            _bubbleShown = false;
-            Bubble.IsHitTestVisible = false;
-            Animate(Bubble, OpacityProperty, 0, 180, _smooth);
+            Animate(PrivacyDot, OpacityProperty, 0, 200, _smooth);
             return;
         }
+        PrivacyDot.Fill = brush;
+        Animate(PrivacyDot, OpacityProperty, 1, 250, _smooth);
+        PrivacyDot.Margin = new Thickness(Gap, pillWidth == null ? 12 : 20.5, Gap, 0);
+        double shift = pillWidth == null ? 0 : _pos switch
+        {
+            "left" => pillWidth.Value + 8,
+            "right" => -(pillWidth.Value + 8),
+            _ => pillWidth.Value / 2 + 12,
+        };
+        Animate(DotShift, TranslateTransform.XProperty, shift);
+    }
 
-        BubblePresenter.ContentTemplate = (DataTemplate)Resources["bubble-" + kind];
-        BubblePresenter.Content = data;
-        if (_bubbleShown) return;
-        _bubbleShown = true;
-        Bubble.IsHitTestVisible = true;
-        Animate(Bubble, OpacityProperty, 1, 260, _smooth);
+    // ---------- mouse tracking (runs while the island is visible) ----------
+
+    void Track()
+    {
+        if (!_shown || !Win32.GetCursorPos(out var p)) return;
+        Point pt;
+        try { pt = PointFromScreen(new Point(p.X, p.Y)); }
+        catch { return; }
+
+        var r = Pill.TransformToAncestor(Root).TransformBounds(new Rect(0, 0, Pill.ActualWidth, Pill.ActualHeight));
+        r.Inflate(2, 2);
+        bool inside = r.Contains(pt);
+        bool alt = Win32.AltDown;
+
+        if (inside != _hover)
+        {
+            _hover = inside;
+            HoverChanged?.Invoke(inside);
+        }
+
+        bool interactive = inside && (alt || Expanded) || _down != null;
+        SetInteractive(interactive);
+
+        bool ghost = inside && !interactive;
+        if (ghost != _ghost)
+        {
+            _ghost = ghost;
+            Animate(Pill, OpacityProperty, ghost ? 0.28 : 1, 150, _smooth);
+        }
+        Pill.BorderBrush = inside && alt ? AltBorder : (Brush)FindResource("IslandBorder");
     }
 
     // ---------- input ----------
@@ -162,16 +253,15 @@ public partial class IslandWindow : Window
         if (sender is FrameworkElement { Tag: string tag }) ActionClicked?.Invoke(tag);
     }
 
-    void Pill_MouseEnter(object sender, MouseEventArgs e) => HoverChanged?.Invoke(true);
-    void Pill_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (!_dragging) HoverChanged?.Invoke(false);
-    }
-
     void Pill_MouseWheel(object sender, MouseWheelEventArgs e) =>
         Wheel?.Invoke(e.Delta > 0 ? 1 : -1, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
-    void Bubble_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => BubbleClicked?.Invoke();
+    void Pill_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (Win32.AltDown) Win32.CancelAltMenu();
+        RightClicked?.Invoke();
+        e.Handled = true;
+    }
 
     Point? _down;
     double _downLeft;
@@ -186,6 +276,7 @@ public partial class IslandWindow : Window
 
     void Pill_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (Win32.AltDown) Win32.CancelAltMenu();
         _down = ScreenDip(e);
         _downLeft = Left;
         _dragging = false;
@@ -211,7 +302,7 @@ public partial class IslandWindow : Window
         _dragging = false;
         if (!wasDrag)
         {
-            IslandClicked?.Invoke();
+            Clicked?.Invoke();
             return;
         }
 

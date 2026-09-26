@@ -89,7 +89,7 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
     }
 
     public static string GlyphFor(float level, bool muted) =>
-        muted || level <= 0.001f ? "" : level < 0.34f ? "" : level < 0.67f ? "" : "";
+        muted || level <= 0.001f ? "\uE74F" : level < 0.34f ? "\uE993" : level < 0.67f ? "\uE994" : "\uE995";
 
     // Called by Windows when devices change (headphones plugged in, etc.).
     public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)

@@ -17,15 +17,17 @@ public sealed class FocusTimer : Observable
     public FocusTimer() => _timer.Tick += (_, _) => Tick();
 
     public bool IsActive { get; private set; }
+    public DateTime StartedAt { get; private set; }
     public bool IsRunning => _running;
     public string RemainingText => Format(_left);
     public double Progress => _total == 0 ? 0 : (double)_left / _total;
     public string PauseText => _running ? "Pause" : "Resume";
-    public string SubText => $"Focus session · {_total / 60} min";
+    public string SubText => $"Focus · {_total / 60} min session";
 
     public void Start(int minutes)
     {
         _total = _left = Math.Max(1, minutes) * 60;
+        StartedAt = DateTime.Now;
         _running = true;
         _timer.Start();
         RaiseAll();

@@ -72,5 +72,5 @@ public sealed class BatteryService
     }
 
     /// <summary>Segoe Fluent battery icon for a percentage.</summary>
-    public static string GlyphFor(int pct) => pct >= 95 ? "" : ((char)(0xE850 + Math.Clamp(pct / 10, 0, 9))).ToString();
+    public static string GlyphFor(int pct) => pct >= 95 ? "\uE83F" : ((char)(0xE850 + Math.Clamp(pct / 10, 0, 9))).ToString();
 }

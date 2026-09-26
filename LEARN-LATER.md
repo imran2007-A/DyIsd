@@ -8,9 +8,12 @@ at the file where it happens.
 - [ ] What WPF is: a XAML file describes the UI, the `.xaml.cs` file next to it is the code
       → `src/DyIsd/Island/IslandWindow.xaml` + `IslandWindow.xaml.cs`
 - [ ] How the island stays on top, is see-through, and never steals focus
-      → `IslandWindow.xaml` (AllowsTransparency, Topmost) and `MakeToolWindow()`
-- [ ] How the app decides what the island shows (activities vs pop-ups)
-      → `src/DyIsd/Island/IslandController.cs` (same idea as `render()` in the prototype)
+      → `IslandWindow.xaml` (AllowsTransparency, Topmost) and `SetExStyle()`
+- [ ] How clicks pass through the island until you hold Alt (WS_EX_TRANSPARENT + cursor polling)
+      → `IslandWindow.xaml.cs` → `Track()`
+- [ ] The spring animation: an easing function is just math → `Controls/SpringEase.cs`
+- [ ] How the app decides what the island shows (newest activity, hidden if you're in its app)
+      → `src/DyIsd/Island/IslandController.cs` → `PickActivity()`
 - [ ] Data binding: `{Binding Title}` in XAML + `INotifyPropertyChanged` in C#
       → `Island/Models.cs`
 - [ ] Events: services raise events, `App.xaml.cs` connects them to the island
@@ -26,7 +29,11 @@ at the file where it happens.
 - [ ] Hiding the Windows volume pop-up: low-level keyboard hook → `Services/VolumeKeyHook.cs`
 - [ ] Brightness: WMI queries and events → `Services/BrightnessService.cs`
 - [ ] Battery: polling power status → `Services/BatteryService.cs`
-- [ ] Notifications: `UserNotificationListener`, and why it needs MSIX → `Services/NotificationService.cs`
+- [ ] Which app you're in: `SetWinEventHook` → `Services/ForegroundWatcher.cs`
+- [ ] Guessing "AI is working" from CPU time → `Services/AiActivityService.cs`
+- [ ] Mic/camera in use: the registry Windows keeps for privacy → `Services/PrivacyService.cs`
+- [ ] Bluetooth earbuds: `DeviceWatcher` → `Services/EarbudsService.cs`
+- [ ] Building UI in code instead of XAML → `ControlCenter.xaml.cs` (tiles, deadline rows)
 - [ ] Clipboard: `AddClipboardFormatListener` + a message-only window → `Services/ClipboardService.cs`, `MessageWindow.cs`
 - [ ] Calendar: downloading and parsing an .ics file → `Services/CalendarService.cs`
 - [ ] Downloads: `FileSystemWatcher` and browser temp files → `Services/DownloadService.cs`

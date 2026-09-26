@@ -11,11 +11,13 @@ public sealed class FeatureFlags
     public bool Volume { get; set; } = true;
     public bool Brightness { get; set; } = true;
     public bool Battery { get; set; } = true;
-    public bool Notifications { get; set; } = true;
     public bool FocusTimer { get; set; } = true;
     public bool Clipboard { get; set; } = true;
     public bool Deadlines { get; set; } = true;
     public bool Downloads { get; set; } = true;
+    public bool AiApps { get; set; } = true;
+    public bool Privacy { get; set; } = true;
+    public bool Earbuds { get; set; } = true;
 }
 
 public sealed class ManualDeadline
@@ -28,9 +30,6 @@ public sealed class AppSettings
 {
     /// <summary>"left", "center" or "right".</summary>
     public string Position { get; set; } = "center";
-
-    /// <summary>"system", "light" or "dark".</summary>
-    public string Theme { get; set; } = "system";
 
     public FeatureFlags Features { get; set; } = new();
     public bool HideWindowsVolumePopup { get; set; } = true;
@@ -69,7 +68,6 @@ public static class SettingsStore
         Current.ManualDeadlines ??= new List<ManualDeadline>();
         Current.FocusMinutes = Math.Clamp(Current.FocusMinutes, 1, 180);
         if (Current.Position is not ("left" or "center" or "right")) Current.Position = "center";
-        if (Current.Theme is not ("system" or "light" or "dark")) Current.Theme = "system";
     }
 
     public static void Save()

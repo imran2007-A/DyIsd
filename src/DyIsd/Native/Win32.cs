@@ -11,6 +11,7 @@ internal static class Win32
     public const long WS_EX_TOOLWINDOW = 0x00000080;   // hides the window from Alt+Tab
     public const long WS_EX_APPWINDOW = 0x00040000;
     public const long WS_EX_NOACTIVATE = 0x08000000;   // clicking the island never steals focus
+    public const long WS_EX_TRANSPARENT = 0x00000020;  // mouse clicks pass straight through the window
 
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010;
@@ -31,6 +32,58 @@ internal static class Win32
 
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+    // ---- foreground app, cursor and keys ----
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003, WINEVENT_OUTOFCONTEXT = 0;
+    public delegate void WinEventProc(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr hmod, WinEventProc proc, uint pid, uint tid, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool UnhookWinEvent(IntPtr hook);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hwnd);
+    public const int SW_RESTORE = 9;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT p);
+
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int vk);
+    public const int VK_MENU = 0x12;
+
+    /// <summary>True while either Alt key is held down.</summary>
+    public static bool AltDown => (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+
+    [DllImport("user32.dll")]
+    static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    /// <summary>
+    /// Presses an unused key. Stops "Alt + click" from opening the menu bar of the app you're in
+    /// when you let go of Alt.
+    /// </summary>
+    public static void CancelAltMenu()
+    {
+        keybd_event(0xE8, 0, 0, UIntPtr.Zero);
+        keybd_event(0xE8, 0, 2, UIntPtr.Zero);
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool AddClipboardFormatListener(IntPtr hwnd);

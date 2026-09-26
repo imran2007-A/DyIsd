@@ -83,6 +83,13 @@ public sealed class CalendarService
         return list.OrderBy(i => i.Start).ToList();
     }
 
+    /// <summary>Everything still ahead, soonest first (for the Control Center list).</summary>
+    public List<UpcomingItem> Upcoming()
+    {
+        var now = DateTime.Now;
+        return All().Where(i => i.AllDay ? i.Start.Date >= now.Date : i.Start > now).OrderBy(i => i.Start).ToList();
+    }
+
     IEnumerable<UpcomingItem> All()
     {
         foreach (var i in _feed) yield return i;

@@ -120,6 +120,7 @@ public sealed class DownloadService : IDisposable
         _missingTicks = 0;
         if (State.IsActive == active) return;
         State.IsActive = active;
+        if (active) State.ActiveSince = System.DateTime.Now;
         ActiveChanged?.Invoke();
     }
 

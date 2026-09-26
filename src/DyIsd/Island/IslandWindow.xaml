@@ -5,10 +5,10 @@
         Title="DyIsd island"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
-        Width="480" Height="250"
+        Width="420" Height="210"
         FontFamily="{StaticResource UiFont}" FontSize="13"
         Foreground="{DynamicResource IslandFg}"
-        TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
 
     <Window.Resources>
         <!-- ============ shared styles ============ -->
@@ -60,13 +60,13 @@
             <Setter Property="Background" Value="{DynamicResource IslandBtn}"/>
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Padding" Value="14,6"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="14" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -81,16 +81,16 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="AccentBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
-            <Setter Property="Background" Value="{DynamicResource Accent}"/>
-            <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+        <Style x:Key="WhiteBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="Black"/>
         </Style>
 
         <!-- ============ MEDIA ============ -->
         <DataTemplate x:Key="media-c">
-            <Grid Margin="8,0" FlowDirection="{DynamicResource CompactFlow}">
+            <Grid Margin="7,0,10,0" FlowDirection="{DynamicResource CompactFlow}">
                 <Border Width="22" Height="22" CornerRadius="6" HorizontalAlignment="Left" Background="{Binding ArtBrush}"/>
-                <c:Equalizer HorizontalAlignment="Right" Width="22" Height="14" IsPlaying="{Binding IsPlaying}" Fill="{DynamicResource Accent}"/>
+                <c:Equalizer HorizontalAlignment="Right" Width="22" Height="14" IsPlaying="{Binding IsPlaying}" Fill="{Binding BarBrush}"/>
             </Grid>
         </DataTemplate>
 
@@ -102,10 +102,8 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <DockPanel>
-                    <Border DockPanel.Dock="Left" Width="58" Height="58" CornerRadius="12" Background="{Binding ArtBrush}"/>
-                    <Border DockPanel.Dock="Right" VerticalAlignment="Top" CornerRadius="10" Padding="8,2" Background="{DynamicResource IslandBtn}">
-                        <TextBlock Text="{Binding Source}" FontSize="11" Foreground="{DynamicResource IslandMute}"/>
-                    </Border>
+                    <Border DockPanel.Dock="Left" Width="56" Height="56" CornerRadius="12" Background="{Binding ArtBrush}"/>
+                    <TextBlock DockPanel.Dock="Right" VerticalAlignment="Top" Text="{Binding Source}" FontSize="11" Foreground="{DynamicResource IslandMute}"/>
                     <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding Artist}" Style="{StaticResource Mute}" Margin="0,1,0,0"/>
@@ -113,12 +111,12 @@
                 </DockPanel>
                 <DockPanel Grid.Row="1" Margin="0,12,0,0" Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVis}}">
                     <TextBlock DockPanel.Dock="Left" Text="{Binding PositionText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
-                    <c:ProgressLine Height="4" Margin="10,0" VerticalAlignment="Center" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding RemainingText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
+                    <c:ProgressLine Height="5" Margin="10,0" VerticalAlignment="Center" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="White"/>
                 </DockPanel>
                 <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Button Style="{StaticResource IconBtn}" Content="&#xE892;" Tag="prev" Click="OnAction" ToolTip="Previous"/>
-                    <Button Style="{StaticResource IconBtn}" Content="{Binding PlayGlyph}" Tag="toggle" Click="OnAction" FontSize="20" Width="42" Height="42" Margin="14,0" ToolTip="Play / pause"/>
+                    <Button Style="{StaticResource IconBtn}" Content="{Binding PlayGlyph}" Tag="toggle" Click="OnAction" FontSize="22" Width="44" Height="44" Margin="18,0" ToolTip="Play / pause"/>
                     <Button Style="{StaticResource IconBtn}" Content="&#xE893;" Tag="next" Click="OnAction" ToolTip="Next"/>
                 </StackPanel>
             </Grid>
@@ -126,27 +124,27 @@
 
         <!-- ============ FOCUS TIMER ============ -->
         <DataTemplate x:Key="timer-c">
-            <Grid Margin="10,0" FlowDirection="{DynamicResource CompactFlow}">
-                <c:RingProgress Width="20" Height="20" HorizontalAlignment="Left" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
-                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding RemainingText}" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
+            <Grid Margin="9,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
+                <c:RingProgress Width="19" Height="19" HorizontalAlignment="Left" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Orange}"/>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding RemainingText}" FontWeight="SemiBold" Foreground="{DynamicResource Orange}" Typography.NumeralAlignment="Tabular"/>
             </Grid>
         </DataTemplate>
 
         <DataTemplate x:Key="timer-e">
-            <Grid Margin="18,14,18,14">
+            <Grid Margin="18,14">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <DockPanel VerticalAlignment="Center">
-                    <c:RingProgress DockPanel.Dock="Left" Width="52" Height="52" Thickness="4" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+                    <c:RingProgress DockPanel.Dock="Left" Width="48" Height="48" Thickness="4" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Orange}"/>
                     <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding RemainingText}" FontSize="32" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
+                        <TextBlock Text="{Binding RemainingText}" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource Orange}" Typography.NumeralAlignment="Tabular"/>
                         <TextBlock Text="{Binding SubText}" Style="{StaticResource Mute}"/>
                     </StackPanel>
                 </DockPanel>
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
-                    <Button Style="{StaticResource AccentBtn}" Content="{Binding PauseText}" Tag="tpause" Click="OnAction" MinWidth="72"/>
+                    <Button Style="{StaticResource WhiteBtn}" Content="{Binding PauseText}" Tag="tpause" Click="OnAction" MinWidth="76"/>
                     <Button Style="{StaticResource PillBtn}" Content="+5 min" Tag="t5" Click="OnAction" Margin="8,0,0,0"/>
                     <Button Style="{StaticResource PillBtn}" Content="End" Tag="tend" Click="OnAction" Margin="8,0,0,0"/>
                 </StackPanel>
@@ -155,7 +153,7 @@
 
         <!-- ============ DOWNLOADS ============ -->
         <DataTemplate x:Key="dl-c">
-            <Grid Margin="12,0" FlowDirection="{DynamicResource CompactFlow}">
+            <Grid Margin="11,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
                 <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/>
                 <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding ShortText}" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
             </Grid>
@@ -169,14 +167,33 @@
                 </Grid.RowDefinitions>
                 <DockPanel VerticalAlignment="Center">
                     <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource Accent}" FontSize="20"/>
-                    <Button DockPanel.Dock="Right" Style="{StaticResource PillBtn}" Content="Open folder" Tag="dfolder" Click="OnAction"/>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource PillBtn}" Content="Folder" Tag="dfolder" Click="OnAction"/>
                     <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding FileName}" Style="{StaticResource Head}"/>
                         <TextBlock Text="{Binding SizeText}" Style="{StaticResource Mute}" Typography.NumeralAlignment="Tabular"/>
                     </StackPanel>
                 </DockPanel>
-                <c:ProgressLine Grid.Row="1" Height="4" Margin="0,10,0,0" IsIndeterminate="True" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+                <c:ProgressLine Grid.Row="1" Height="5" Margin="0,10,0,0" IsIndeterminate="True" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
             </Grid>
+        </DataTemplate>
+
+        <!-- ============ AI APP WORKING ============ -->
+        <DataTemplate x:Key="ai-c">
+            <Grid Margin="8,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
+                <c:Thinking Width="20" Height="20" HorizontalAlignment="Left" Fill="{Binding Color}"/>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding Name}" FontWeight="SemiBold" Foreground="{Binding Color}"/>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ai-e">
+            <DockPanel Margin="16,0" VerticalAlignment="Center">
+                <c:Thinking DockPanel.Dock="Left" Width="42" Height="42" Fill="{Binding Color}"/>
+                <Button DockPanel.Dock="Right" Style="{StaticResource WhiteBtn}" Content="Open" Tag="jump" Click="OnAction"/>
+                <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Elapsed}" Style="{StaticResource Mute}" Typography.NumeralAlignment="Tabular"/>
+                </StackPanel>
+            </DockPanel>
         </DataTemplate>
 
         <!-- ============ VOLUME / BRIGHTNESS ============ -->
@@ -188,12 +205,12 @@
                     <ColumnDefinition Width="32"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}"/>
-                <c:ProgressLine Grid.Column="1" Height="4" Margin="12,0" VerticalAlignment="Center" Value="{Binding Value}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+                <c:ProgressLine Grid.Column="1" Height="5" Margin="12,0" VerticalAlignment="Center" Value="{Binding Value}" Track="{DynamicResource IslandTrack}" Fill="White"/>
                 <TextBlock Grid.Column="2" Text="{Binding Text}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
             </Grid>
         </DataTemplate>
 
-        <!-- ============ ONE-LINE PILL (battery, done messages) ============ -->
+        <!-- ============ ONE-LINE PILL (battery, short messages) ============ -->
         <DataTemplate x:Key="pill">
             <Grid Margin="14,0">
                 <Grid.ColumnDefinitions>
@@ -206,12 +223,12 @@
                 <TextBlock Grid.Column="1" Margin="10,0" Text="{Binding Title}" Style="{StaticResource Head}" VerticalAlignment="Center"/>
                 <TextBlock Grid.Column="2" Text="{Binding Right}" Foreground="{Binding RightBrush}" VerticalAlignment="Center" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"
                            Visibility="{Binding Right, Converter={StaticResource NullToCollapsed}}"/>
-                <Button Grid.Column="3" Style="{StaticResource PillBtn}" Content="{Binding Button1}" Tag="{Binding Tag1}" Click="OnAction" Margin="10,0,0,0" Padding="10,5"
+                <Button Grid.Column="3" Style="{StaticResource PillBtn}" Content="{Binding Button1}" Tag="{Binding Tag1}" Click="OnAction" Margin="10,0,0,0" Padding="11,5"
                         Visibility="{Binding Button1, Converter={StaticResource NullToCollapsed}}"/>
             </Grid>
         </DataTemplate>
 
-        <!-- ============ TWO-LINE CARD (clipboard, deadline, download done) ============ -->
+        <!-- ============ TWO-LINE CARD (deadline, download done, AI finished, earbuds) ============ -->
         <DataTemplate x:Key="card">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>
@@ -219,22 +236,24 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}" FontSize="18"/>
+                <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}" FontSize="19"/>
                 <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Title}" Style="{StaticResource Head}"/>
                     <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Mute}" Margin="0,1,0,0"
                                Visibility="{Binding Subtitle, Converter={StaticResource NullToCollapsed}}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource PillBtn}" Content="{Binding Button1}" Tag="{Binding Tag1}" Click="OnAction" Padding="10,5"
+                    <TextBlock Text="{Binding Right}" Foreground="{Binding RightBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,4,0"
+                               Visibility="{Binding Right, Converter={StaticResource NullToCollapsed}}"/>
+                    <Button Style="{StaticResource WhiteBtn}" Content="{Binding Button1}" Tag="{Binding Tag1}" Click="OnAction" Padding="12,5"
                             Visibility="{Binding Button1, Converter={StaticResource NullToCollapsed}}"/>
-                    <Button Style="{StaticResource PillBtn}" Content="{Binding Button2}" Tag="{Binding Tag2}" Click="OnAction" Padding="10,5" Margin="6,0,0,0"
+                    <Button Style="{StaticResource PillBtn}" Content="{Binding Button2}" Tag="{Binding Tag2}" Click="OnAction" Padding="12,5" Margin="6,0,0,0"
                             Visibility="{Binding Button2, Converter={StaticResource NullToCollapsed}}"/>
                 </StackPanel>
             </Grid>
         </DataTemplate>
 
-        <!-- same card, but the second line is monospace (copied text) -->
+        <!-- same card, second line in monospace (copied text) -->
         <DataTemplate x:Key="clip">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>
@@ -249,70 +268,27 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>
-
-        <!-- ============ NOTIFICATION ============ -->
-        <DataTemplate x:Key="notif">
-            <Grid Margin="14,0,8,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Grid Width="38" Height="38" VerticalAlignment="Center">
-                    <Ellipse Fill="{Binding AvatarBrush}"/>
-                    <TextBlock Text="{Binding Initial}" Foreground="White" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    <Image Source="{Binding Image}" Width="30" Height="30" Visibility="{Binding Image, Converter={StaticResource NullToCollapsed}}"/>
-                </Grid>
-                <StackPanel Grid.Column="1" Margin="12,0,6,0" VerticalAlignment="Center">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding AppName}" Style="{StaticResource Mute}" Margin="8,0,0,0" MaxWidth="120"/>
-                        <TextBlock Text="{Binding Title}" Style="{StaticResource Head}"/>
-                    </DockPanel>
-                    <TextBlock Text="{Binding Subtitle}" FontSize="12.5" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36" Margin="0,2,0,0"/>
-                </StackPanel>
-                <Button Grid.Column="2" Style="{StaticResource IconBtn}" Content="&#xE711;" FontSize="12" Width="30" Height="30" Tag="dismiss" Click="OnAction" VerticalAlignment="Center" ToolTip="Dismiss"/>
-            </Grid>
-        </DataTemplate>
-
-        <!-- ============ SECOND-ACTIVITY BUBBLE ============ -->
-        <DataTemplate x:Key="bubble-media">
-            <Border Width="24" Height="24" CornerRadius="12" Background="{Binding ArtBrush}"/>
-        </DataTemplate>
-        <DataTemplate x:Key="bubble-timer">
-            <c:RingProgress Width="22" Height="22" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
-        </DataTemplate>
-        <DataTemplate x:Key="bubble-download">
-            <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource Accent}"/>
-        </DataTemplate>
     </Window.Resources>
 
-    <Grid>
-        <StackPanel x:Name="Row" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="16,8,16,0">
-            <Border x:Name="Pill" Width="200" Height="36" Opacity="0" IsHitTestVisible="False"
-                    Background="{DynamicResource IslandBg}" BorderBrush="{DynamicResource IslandBorder}" BorderThickness="1"
-                    CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource Radius}}"
-                    ClipToBounds="True" Cursor="Hand" FlowDirection="LeftToRight"
-                    MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave"
-                    MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp"
-                    MouseWheel="Pill_MouseWheel">
-                <Border.RenderTransform>
-                    <ScaleTransform x:Name="PillScale" ScaleX="0.6" ScaleY="0.6"/>
-                </Border.RenderTransform>
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="22" ShadowDepth="4" Direction="270" Opacity="0.26" Color="Black"/>
-                </Border.Effect>
-                <ContentPresenter x:Name="Presenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
+    <Grid x:Name="Root">
+        <Border x:Name="Pill" Width="190" Height="34" Margin="14,8,14,0" VerticalAlignment="Top" HorizontalAlignment="Center"
+                Opacity="0" Background="{DynamicResource IslandBg}" BorderBrush="{DynamicResource IslandBorder}" BorderThickness="1"
+                CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource Radius}}"
+                ClipToBounds="True"
+                MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp"
+                MouseRightButtonUp="Pill_MouseRightButtonUp" MouseWheel="Pill_MouseWheel">
+            <Border.RenderTransform>
+                <ScaleTransform x:Name="PillScale" ScaleX="0.5" ScaleY="0.5"/>
+            </Border.RenderTransform>
+            <ContentPresenter x:Name="Presenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
 
-            <Border x:Name="Bubble" Width="36" Height="36" CornerRadius="18" Margin="8,0,0,0" VerticalAlignment="Top"
-                    Opacity="0" IsHitTestVisible="False" Cursor="Hand" FlowDirection="LeftToRight"
-                    Background="{DynamicResource IslandBg}" BorderBrush="{DynamicResource IslandBorder}" BorderThickness="1"
-                    MouseLeftButtonUp="Bubble_MouseLeftButtonUp" ToolTip="Switch">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.24" Color="Black"/>
-                </Border.Effect>
-                <ContentPresenter x:Name="BubblePresenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-        </StackPanel>
+        <!-- mic (orange) / camera (green) in use -->
+        <Ellipse x:Name="PrivacyDot" Width="9" Height="9" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="14,20,14,0"
+                 Opacity="0" IsHitTestVisible="False" Fill="{DynamicResource Orange}">
+            <Ellipse.RenderTransform>
+                <TranslateTransform x:Name="DotShift"/>
+            </Ellipse.RenderTransform>
+        </Ellipse>
     </Grid>
 </Window>

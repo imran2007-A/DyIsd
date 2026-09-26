@@ -34,12 +34,18 @@ public sealed class MediaState : Observable
     public string Source { get => _source; set => Set(ref _source, value); }
     public Brush? ArtBrush { get => _art; set => Set(ref _art, value); }
     public bool IsPlaying { get => _playing; set { if (Set(ref _playing, value)) Raise(nameof(PlayGlyph)); } }
-    public string PlayGlyph => _playing ? "" : "";
+    public string PlayGlyph => _playing ? "\uE769" : "\uE768";
     public double Progress { get => _progress; set => Set(ref _progress, value); }
     public string PositionText { get => _position; set => Set(ref _position, value); }
     public string DurationText { get => _duration; set => Set(ref _duration, value); }
     public bool HasTimeline { get => _hasTimeline; set => Set(ref _hasTimeline, value); }
     public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public string[] Processes { get; set; } = System.Array.Empty<string>();
+    public System.DateTime ActiveSince { get; set; }
+    Brush _bar = Brushes.White;
+    public Brush BarBrush { get => _bar; set => Set(ref _bar, value); }
+    public string RemainingText { get => _remaining; set => Set(ref _remaining, value); }
+    string _remaining = "";
 }
 
 /// <summary>What the download view shows.</summary>
@@ -52,6 +58,19 @@ public sealed class DownloadState : Observable
     public string SizeText { get => _size; set => Set(ref _size, value); }
     public string ShortText { get => _short; set => Set(ref _short, value); }
     public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public System.DateTime ActiveSince { get; set; }
+}
+
+/// <summary>An AI app that's busy in another window.</summary>
+public sealed class AiState : Observable
+{
+    string _name = "", _elapsed = "";
+    Brush _color = Brushes.White;
+
+    public string Name { get => _name; set { if (Set(ref _name, value)) Raise(nameof(Title)); } }
+    public string Title => $"{_name} is working";
+    public Brush Color { get => _color; set => Set(ref _color, value); }
+    public string Elapsed { get => _elapsed; set => Set(ref _elapsed, value); }
 }
 
 /// <summary>Volume or brightness pop-up.</summary>

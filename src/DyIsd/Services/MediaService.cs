@@ -97,6 +97,8 @@ public sealed class MediaService
             State.Title = p.Title ?? "";
             State.Artist = string.IsNullOrWhiteSpace(p.Artist) ? p.AlbumArtist ?? "" : p.Artist;
             State.Source = FriendlyName(s.SourceAppUserModelId);
+            State.Processes = ProcessNames(s.SourceAppUserModelId);
+            State.BarBrush = State.Source == "Spotify" ? SpotifyGreen : Brushes.White;
             State.ArtBrush = (p.Thumbnail != null ? await LoadArtAsync(p.Thumbnail) : null) ?? FallbackArt(State.Title);
         }
         catch (Exception ex)
@@ -114,6 +116,7 @@ public sealed class MediaService
         {
             bool playing = s.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
             if (!playing && State.IsPlaying) _pausedAt = DateTime.Now;
+            if (playing && !State.IsPlaying) State.ActiveSince = DateTime.Now; // resuming counts as new
             State.IsPlaying = playing;
         }
         catch (Exception ex)
@@ -165,6 +168,7 @@ public sealed class MediaService
         State.Progress = pos.TotalSeconds / _tlLength.TotalSeconds;
         State.PositionText = Format(pos);
         State.DurationText = Format(_tlLength);
+        State.RemainingText = "-" + Format(_tlLength - pos);
     }
 
     void Recompute()
@@ -173,6 +177,7 @@ public sealed class MediaService
                       (State.IsPlaying || DateTime.Now - _pausedAt < PausedLinger);
         if (active == State.IsActive) return;
         State.IsActive = active;
+        if (active) State.ActiveSince = DateTime.Now;
         ActiveChanged?.Invoke();
     }
 
@@ -231,6 +236,25 @@ public sealed class MediaService
         var g = new LinearGradientBrush(a, b, 45);
         g.Freeze();
         return g;
+    }
+
+    static readonly Brush SpotifyGreen = ThemeService.Solid(Color.FromRgb(0x1D, 0xB9, 0x54));
+
+    /// <summary>Process names of the app playing, so we can hide it while you're in that app.</summary>
+    static string[] ProcessNames(string id)
+    {
+        var s = (id ?? "").ToLowerInvariant();
+        if (s.Contains("spotify")) return new[] { "spotify" };
+        if (s.Contains("msedge")) return new[] { "msedge" };
+        if (s.Contains("chrome")) return new[] { "chrome" };
+        if (s.Contains("firefox") || s.Contains("308046b0af4a39cb")) return new[] { "firefox" };
+        if (s.Contains("brave")) return new[] { "brave" };
+        if (s.Contains("opera")) return new[] { "opera" };
+        if (s.Contains("zunemusic") || s.Contains("zunevideo")) return new[] { "microsoft.media.player", "music.ui", "video.ui" };
+        if (s.Contains("vlc")) return new[] { "vlc" };
+        if (s.Contains("applemusic")) return new[] { "applemusic" };
+        var name = Path.GetFileNameWithoutExtension((id ?? "").Split('!')[0]).ToLowerInvariant();
+        return name.Length > 0 ? new[] { name } : Array.Empty<string>();
     }
 
     static string FriendlyName(string id)

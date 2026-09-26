@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\DyIsd.ico" LogicalName="DyIsd.ico" />
+    <Resource Include="Assets\icon.png" />
   </ItemGroup>
 
 </Project>

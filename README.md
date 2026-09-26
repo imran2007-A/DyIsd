@@ -1,22 +1,41 @@
 # DyIsd
 
-A dynamic island for Windows 11. A small pill at the top of your screen that appears when
-something happens and hides when nothing is.
+A dynamic island for Windows 11, modeled on the iPhone's. A small black pill at the top of your
+screen that appears when something is running in the background and hides when nothing is.
+Anything that belongs to the app you're already in stays hidden: YouTube playing in Chrome
+doesn't show while you're in Chrome.
 
 | Feature | What it shows |
 |---|---|
 | Now playing | Song, artist, album art, play/pause/skip from Spotify, YouTube in any browser, Media Player, VLC… |
-| Volume | Replaces the Windows volume pop-up. Scroll over the island to change volume. |
-| Brightness | Pops up when laptop brightness changes. Shift + scroll over the island to change it. |
+| AI apps | "Claude is working…" while the Claude, ChatGPT or Codex app is busy and you're in another window, then "finished". |
+| Volume | Replaces the Windows volume pop-up. |
+| Brightness | Pops up when laptop brightness changes. |
 | Battery | Charger plugged in or out, warnings at 15% and 5%. |
-| Notifications | WhatsApp, Discord, Outlook and other app notifications. |
-| Focus timer | 25-minute focus sessions. **Ctrl + Alt + F** or the tray icon starts one. |
+| Mic & camera | Orange dot while an app uses your mic, green dot for the camera, like the iPhone. |
+| Earbuds | A card when Bluetooth earbuds or headphones connect, with battery level when Windows knows it. |
+| Focus timer | Focus sessions of 15–60 min. **Ctrl + Alt + F** or the Control Center starts one. |
 | Clipboard | What you just copied. Password-manager copies are never shown. |
 | Classes & deadlines | Reminders from your Google Calendar link and deadlines you add. |
 | Downloads | While a browser downloads, then "Download complete" with Open / Folder. |
 
-Every feature can be turned off in Settings. The island can sit top-left, top-center or
-top-right: drag it, or pick in Settings. It follows your Windows light/dark theme and accent color.
+Only the newest activity shows at a time.
+
+## Using it
+
+The island never gets in your way: move the mouse over it and it fades, and clicks go through
+to whatever is underneath (like Chrome tabs). **Hold Alt** to use it:
+
+| | |
+|---|---|
+| Alt + click | Jump to the app (Spotify, Chrome, Claude…) |
+| Alt + right-click | Expand for controls; stays open until you move away |
+| Alt + drag | Move it to the left, center or right |
+| Alt + scroll | Volume (Shift too for brightness) |
+
+**Control Center:** click the DyIsd icon in the taskbar corner. Turn features on and off, start
+a focus session, add deadlines, paste your calendar link, pick the position.
+Windows 11 may hide new tray icons under the `^` arrow; drag DyIsd out onto the taskbar to keep it visible.
 
 ## Install
 
@@ -24,15 +43,9 @@ top-right: drag it, or pick in Settings. It follows your Windows light/dark them
 2. Under **Artifacts**, download **DyIsd-installer** and unzip it.
 3. Double-click **Install.bat** and click **Yes** on the admin prompt.
    (It trusts DyIsd's certificate, installs the app and starts it.)
-4. The first time, Windows asks whether DyIsd can read your notifications. Click **Allow**.
-
 To update, do the same with a newer build. Your settings are kept.
 
-**Portable version:** `DyIsd-portable` is a plain folder; run `DyIsd.exe`. Everything works
-except notifications, because Windows only gives notification access to installed apps.
-
-Right-click the DyIsd icon in the taskbar corner for: focus session, what's next, settings,
-pause, quit.
+**Portable version:** `DyIsd-portable` is a plain folder; run `DyIsd.exe`. Everything works the same.
 
 ## Where things are
 
@@ -50,7 +63,7 @@ src/DyIsd/
   Services/              one file per Windows feature (media, volume, battery, ...)
   Controls/              hand-drawn progress ring, progress bar, equalizer bars
   Settings/              settings saved as JSON
-  SettingsWindow.xaml    the settings screen
+  ControlCenter.xaml     the black panel with toggles, deadlines and options
 packaging/               MSIX installer manifest, build and install scripts
 prototype/island.html    the clickable design prototype (open in any browser)
 .github/workflows/       GitHub Actions: builds the installer on every push
@@ -58,6 +71,10 @@ prototype/island.html    the clickable design prototype (open in any browser)
 
 Built with C#, .NET 10 and WPF. Libraries: NAudio (volume), Ical.Net (calendar),
 System.Management (brightness).
+
+**About the AI indicator:** the Claude, ChatGPT and Codex apps don't tell other apps when
+they're busy, so DyIsd guesses from how much CPU they use. If it triggers too often or too late,
+send `log.txt` (it records the numbers) and the thresholds in `Services/AiActivityService.cs` can be tuned.
 
 ## Build it yourself
 

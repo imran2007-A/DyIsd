@@ -5,10 +5,13 @@ using WF = System.Windows.Forms;
 
 namespace DyIsd.Services;
 
-/// <summary>The DyIsd icon in the taskbar corner, with its right-click menu.</summary>
+/// <summary>
+/// The DyIsd icon in the taskbar corner. Left-click opens the Control Center,
+/// right-click shows quick actions.
+/// </summary>
 public sealed class TrayIcon : IDisposable
 {
-    public event Action? OpenSettings, ToggleTimer, WhatsNext, Quit;
+    public event Action? OpenControlCenter, ToggleTimer, WhatsNext, Quit;
     public event Action<bool>? PauseChanged;
 
     readonly WF.NotifyIcon _icon;
@@ -18,29 +21,24 @@ public sealed class TrayIcon : IDisposable
     {
         WF.Application.EnableVisualStyles();
         _timerItem = new WF.ToolStripMenuItem("Start focus session", null, (_, _) => ToggleTimer?.Invoke());
-        _pauseItem = new WF.ToolStripMenuItem("Pause island", null, (_, _) =>
-        {
-            _pauseItem!.Checked = !_pauseItem.Checked;
-            PauseChanged?.Invoke(_pauseItem.Checked);
-        });
+        _pauseItem = new WF.ToolStripMenuItem("Pause island", null, (_, _) => PauseChanged?.Invoke(!_pauseItem!.Checked));
 
         var menu = new WF.ContextMenuStrip();
+        menu.Items.Add(new WF.ToolStripMenuItem("Open Control Center", null, (_, _) => OpenControlCenter?.Invoke()) { Font = new Font(WF.Control.DefaultFont, FontStyle.Bold) });
         menu.Items.Add(_timerItem);
         menu.Items.Add(new WF.ToolStripMenuItem("What's next", null, (_, _) => WhatsNext?.Invoke()));
         menu.Items.Add(new WF.ToolStripSeparator());
-        menu.Items.Add(new WF.ToolStripMenuItem("Settings", null, (_, _) => OpenSettings?.Invoke()));
         menu.Items.Add(_pauseItem);
-        menu.Items.Add(new WF.ToolStripSeparator());
         menu.Items.Add(new WF.ToolStripMenuItem("Quit DyIsd", null, (_, _) => Quit?.Invoke()));
 
         _icon = new WF.NotifyIcon
         {
             Icon = LoadIcon(),
-            Text = "DyIsd",
+            Text = "DyIsd · click for Control Center",
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _icon.DoubleClick += (_, _) => OpenSettings?.Invoke();
+        _icon.MouseClick += (_, e) => { if (e.Button == WF.MouseButtons.Left) OpenControlCenter?.Invoke(); };
     }
 
     static Icon LoadIcon()
@@ -56,6 +54,8 @@ public sealed class TrayIcon : IDisposable
 
     public void SetTimer(bool active, int minutes) =>
         _timerItem.Text = active ? "End focus session" : $"Start focus session ({minutes} min)";
+
+    public void SetPaused(bool paused) => _pauseItem.Checked = paused;
 
     public void Dispose()
     {

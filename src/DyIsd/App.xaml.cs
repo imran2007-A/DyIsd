@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Media;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using DyIsd.Island;
 using DyIsd.Native;
 using DyIsd.Services;
@@ -16,23 +16,27 @@ namespace DyIsd;
 public partial class App : Application
 {
     Mutex? _single;
-    IslandWindow? _island;
-    IslandController? _ctl;
+    IslandWindow? _window;
     MessageWindow? _messages;
     TrayIcon? _tray;
-    SettingsWindow? _settingsWindow;
+    ControlCenter? _cc;
     string _lastCalendarUrl = "";
+    readonly AiState _aiState = new();
 
+    public IslandController? Island { get; private set; }
     public MediaService Media { get; private set; } = null!;
     public VolumeService Volume { get; private set; } = null!;
     public BrightnessService Brightness { get; private set; } = null!;
     public BatteryService Battery { get; private set; } = null!;
-    public NotificationService Notifications { get; private set; } = null!;
     public ClipboardService Clip { get; private set; } = null!;
     public CalendarService Calendar { get; private set; } = null!;
     public DownloadService Downloads { get; private set; } = null!;
     public FocusTimer Timer { get; private set; } = null!;
     public FullscreenWatcher Fullscreen { get; private set; } = null!;
+    public ForegroundWatcher Foreground { get; private set; } = null!;
+    public AiActivityService Ai { get; private set; } = null!;
+    public PrivacyService Privacy { get; private set; } = null!;
+    public EarbudsService Earbuds { get; private set; } = null!;
     public VolumeKeyHook KeyHook { get; private set; } = null!;
 
     const int HotkeyFocus = 1;
@@ -58,31 +62,38 @@ public partial class App : Application
         SettingsStore.Load();
         ThemeService.Init();
 
-        _island = new IslandWindow();
-        _island.Show();
+        _window = new IslandWindow();
+        _window.Show();
 
         Media = new MediaService();
         Volume = new VolumeService();
         Brightness = new BrightnessService();
         Battery = new BatteryService();
-        Notifications = new NotificationService();
         Clip = new ClipboardService();
         Calendar = new CalendarService();
         Downloads = new DownloadService();
         Timer = new FocusTimer();
         Fullscreen = new FullscreenWatcher();
+        Foreground = new ForegroundWatcher();
+        Ai = new AiActivityService();
+        Privacy = new PrivacyService();
+        Earbuds = new EarbudsService();
         KeyHook = new VolumeKeyHook();
         _messages = new MessageWindow();
 
-        _ctl = new IslandController(_island, Media.State, Timer, Downloads.State);
+        Island = new IslandController(_window, Media.State, Timer, Downloads.State, _aiState, Foreground);
         Wire();
 
+        Foreground.Start();
         Volume.Start();
         Brightness.Start();
         Battery.Start();
         Clip.Attach(_messages);
         Downloads.Start();
         Fullscreen.Start();
+        Ai.Start();
+        Privacy.Start();
+        Earbuds.Start();
         _lastCalendarUrl = S.CalendarUrl;
         Calendar.Start();
         ApplyKeyHook();
@@ -91,22 +102,22 @@ public partial class App : Application
         SettingsStore.Changed += OnSettingsChanged;
 
         await Media.StartAsync();
-        if (S.Features.Notifications) await Notifications.StartAsync(askPermission: !S.FirstRunDone);
 
         if (!S.FirstRunDone)
         {
             S.FirstRunDone = true;
             SettingsStore.Save();
-            _ctl.ShowMessage("", "Accent", "DyIsd is running · Ctrl+Alt+F starts a focus session", 440, 5000);
-            OpenSettings();
+            Island.ShowMessage("", "Accent", "DyIsd is running · hold Alt over the island to use it", 400, 6000);
+            OpenControlCenter();
         }
     }
 
     void Wire()
     {
-        var c = _ctl!;
+        var c = Island!;
         Media.ActiveChanged += c.Render;
         Downloads.ActiveChanged += c.Render;
+        Foreground.Changed += c.Render;
         Timer.ActiveChanged += () =>
         {
             c.Render();
@@ -115,19 +126,62 @@ public partial class App : Application
         Timer.Finished += () =>
         {
             SystemSounds.Asterisk.Play();
-            c.ShowMessage("", "Good", "Focus session done · take 5", 290, 6000, fullscreenOk: true);
+            c.ShowMessage("", "Good", "Focus done · take 5", 230, 6000, fullscreenOk: true);
         };
 
+        // AI apps: show the newest one that's working.
+        Ai.Started += app =>
+        {
+            c.AiApp = app;
+            c.AiSince = DateTime.Now;
+            _aiState.Name = app.Name;
+            _aiState.Color = ThemeService.Solid(app.Color);
+            UpdateAiElapsed();
+            c.Render();
+        };
+        Ai.Finished += (app, took) =>
+        {
+            if (c.AiApp == app)
+            {
+                c.AiApp = Ai.Working;
+                if (c.AiApp != null)
+                {
+                    c.AiSince = Ai.WorkingSince(c.AiApp);
+                    _aiState.Name = c.AiApp.Name;
+                    _aiState.Color = ThemeService.Solid(c.AiApp.Color);
+                }
+            }
+            if (S.Features.AiApps && took > TimeSpan.FromSeconds(8)) c.ShowAiFinished(app, took);
+            else c.Render();
+        };
+        var aiClock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        aiClock.Tick += (_, _) => UpdateAiElapsed();
+        aiClock.Start();
+
+        // Mic / camera dot.
+        Privacy.Changed += () =>
+        {
+            var before = c.Privacy.App;
+            if (Privacy.CamApp != null) c.Privacy = (ThemeService.Brush("Good"), Privacy.CamApp);
+            else if (Privacy.MicApp != null) c.Privacy = (ThemeService.Brush("Orange"), Privacy.MicApp);
+            else c.Privacy = (null, null);
+
+            if (S.Features.Privacy && c.Privacy.App != null && c.Privacy.App != before)
+                c.ShowPrivacy(Privacy.CamApp != null, c.Privacy.App);
+            else c.Render();
+        };
+
+        Earbuds.Changed += (name, connected, battery) => { if (S.Features.Earbuds) c.ShowEarbuds(name, connected, battery); };
         Volume.Changed += (level, muted) => { if (S.Features.Volume) c.ShowVolume(level, muted); };
         Brightness.Changed += level => { if (S.Features.Brightness) c.ShowBrightness(level); };
         Battery.Event += (ev, pct, left) => { if (S.Features.Battery) c.ShowBattery(ev, pct, left); };
-        Notifications.Arrived += n => { if (S.Features.Notifications) c.ShowNotification(n); };
         Clip.Copied += info => { if (S.Features.Clipboard) c.ShowClipboard(info); };
         Calendar.Alert += (_, headline, detail) => { if (S.Features.Deadlines) c.ShowDeadline(headline, detail); };
         Downloads.Completed += path => { if (S.Features.Downloads) c.ShowDownloadDone(path); };
         Fullscreen.Changed += () => c.SetFullscreen(Fullscreen.IsFullscreen);
 
         c.ActionRequested += OnIslandAction;
+        c.JumpRequested += names => AppJumper.Focus(names);
         c.WheelRequested += (dir, shift) =>
         {
             if (shift) { if (S.Features.Brightness) Brightness.Step(dir * 5); }
@@ -156,6 +210,13 @@ public partial class App : Application
         };
     }
 
+    void UpdateAiElapsed()
+    {
+        if (Island?.AiApp == null) return;
+        var t = DateTime.Now - Island.AiSince;
+        _aiState.Elapsed = $"In another window · {(int)t.TotalMinutes}:{t.Seconds:00}";
+    }
+
     void OnIslandAction(string tag)
     {
         switch (tag)
@@ -167,10 +228,10 @@ public partial class App : Application
             case "t5": Timer.AddFive(); break;
             case "tend": Timer.End(); break;
             case "dfolder": Open(Downloads.Folder); break;
-            case "open-file": if (_ctl!.LastDownloadPath != null) Open(_ctl.LastDownloadPath); break;
+            case "open-file": if (Island!.LastDownloadPath != null) Open(Island.LastDownloadPath); break;
             case "show-file":
-                if (_ctl!.LastDownloadPath != null)
-                    TryStart(new ProcessStartInfo("explorer.exe", $"/select,\"{_ctl.LastDownloadPath}\""));
+                if (Island!.LastDownloadPath != null)
+                    TryStart(new ProcessStartInfo("explorer.exe", $"/select,\"{Island.LastDownloadPath}\""));
                 break;
             case "batt-settings": Open("ms-settings:batterysaver"); break;
         }
@@ -189,6 +250,16 @@ public partial class App : Application
         if (!S.Features.FocusTimer) return;
         if (Timer.IsActive) Timer.End();
         else Timer.Start(S.FocusMinutes);
+    }
+
+    public bool IslandPaused
+    {
+        get => Island?.Paused ?? false;
+        set
+        {
+            if (Island != null) Island.Paused = value;
+            _tray?.SetPaused(value);
+        }
     }
 
     void RegisterHotkeys()
@@ -212,51 +283,55 @@ public partial class App : Application
     {
         _tray = new TrayIcon();
         _tray.SetTimer(false, S.FocusMinutes);
-        _tray.OpenSettings += OpenSettings;
+        _tray.OpenControlCenter += ToggleControlCenter;
         _tray.ToggleTimer += ToggleFocus;
         _tray.WhatsNext += ShowWhatsNext;
-        _tray.PauseChanged += paused => _ctl!.Paused = paused;
+        _tray.PauseChanged += paused => IslandPaused = paused;
         _tray.Quit += Quit;
     }
 
     public void ShowWhatsNext()
     {
         var next = Calendar.Next();
-        if (next == null) _ctl!.ShowMessage("", "Accent", "Nothing coming up in the next 7 days", 340);
-        else _ctl!.ShowDeadline(next.Value.Title, next.Value.Detail);
+        if (next == null) Island!.ShowMessage("", "Accent", "Nothing coming up this week", 280);
+        else Island!.ShowDeadline(next.Value.Title, next.Value.Detail);
     }
 
-    public void OpenSettings()
+    void ToggleControlCenter()
     {
-        if (_settingsWindow != null)
-        {
-            _settingsWindow.Activate();
-            return;
-        }
-        _settingsWindow = new SettingsWindow(this);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow.Show();
-        _settingsWindow.Activate();
+        if (_cc != null) { _cc.Close(); return; }
+        // Clicking the tray icon while the panel is open closes it first; don't instantly reopen.
+        if (_lastCcClose > DateTime.Now.AddMilliseconds(-400)) return;
+        OpenControlCenter();
+    }
+
+    DateTime _lastCcClose;
+
+    public void OpenControlCenter()
+    {
+        if (_cc != null) { _cc.Activate(); return; }
+        _cc = new ControlCenter(this);
+        _cc.Closed += (_, _) => { _lastCcClose = DateTime.Now; _cc = null; };
+        _cc.Open(_window!.IslandArea, S.Position);
     }
 
     void OnSettingsChanged()
     {
-        ThemeService.Apply();
-        _island!.ApplyPosition(S.Position);
+        _window!.ApplyPosition(S.Position);
         ApplyKeyHook();
         if (!S.Features.FocusTimer && Timer.IsActive) Timer.End();
-        if (!S.Features.Notifications) Notifications.Stop();
         _tray?.SetTimer(Timer.IsActive, S.FocusMinutes);
         if (S.CalendarUrl != _lastCalendarUrl)
         {
             _lastCalendarUrl = S.CalendarUrl;
             _ = Calendar.RefreshAsync();
         }
-        _ctl!.Render();
+        Island!.Render();
     }
 
-    void Quit()
+    public void Quit()
     {
+        _cc?.Close();
         _tray?.Dispose();
         KeyHook.Dispose();
         Shutdown();
@@ -271,12 +346,10 @@ public partial class App : Application
             Volume?.Dispose();
             Brightness?.Dispose();
             Downloads?.Dispose();
+            Foreground?.Dispose();
             if (_messages != null) Win32.UnregisterHotKey(_messages.Handle, HotkeyFocus);
         }
         catch { }
         base.OnExit(e);
     }
-
-    public static string LogFolder => Log.Dir;
-    public static bool LogFolderExists => Directory.Exists(Log.Dir);
 }

@@ -12,7 +12,7 @@
         <c:NullToCollapsedConverter x:Key="NullToCollapsed"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Default colors. ThemeService replaces these to match your Windows theme. -->
+        <!-- Default colors. ThemeService sets the real ones at startup. -->
         <SolidColorBrush x:Key="IslandBg" Color="#F72B2B2D"/>
         <SolidColorBrush x:Key="IslandBorder" Color="#1AFFFFFF"/>
         <SolidColorBrush x:Key="IslandFg" Color="White"/>
