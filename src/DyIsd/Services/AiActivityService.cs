@@ -7,7 +7,7 @@ using System.Windows.Threading;
 
 namespace DyIsd.Services;
 
-public sealed record AiApp(string Key, string Name, string[] Processes, Color Color, string Loader);
+public sealed record AiApp(string Key, string Name, string[] Processes, Color Color);
 
 /// <summary>
 /// Guesses when Claude, ChatGPT or Codex is busy working. These apps give no official signal,
@@ -18,9 +18,9 @@ public sealed class AiActivityService
 {
     public static readonly AiApp[] Apps =
     {
-        new("claude", "Claude", new[] { "claude" }, Color.FromRgb(0xD9, 0x77, 0x57), "claude"),
-        new("chatgpt", "ChatGPT", new[] { "chatgpt" }, Colors.White, "openai"),
-        new("codex", "Codex", new[] { "codex" }, Colors.White, "openai"),
+        new("claude", "Claude", new[] { "claude" }, Color.FromRgb(0xD9, 0x77, 0x57)),
+        new("chatgpt", "ChatGPT", new[] { "chatgpt" }, Color.FromRgb(0x10, 0xA3, 0x7F)),
+        new("codex", "Codex", new[] { "codex" }, Color.FromRgb(0xE8, 0xE8, 0xE8)),
     };
 
     // Percent of one CPU core, averaged over the last few seconds.

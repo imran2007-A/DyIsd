@@ -24,6 +24,20 @@ public sealed class ManualDeadline
 {
     public string Title { get; set; } = "";
     public DateTime Due { get; set; }
+
+    /// <summary>Remind this many minutes before it's due (0 = at the due time).</summary>
+    public List<int> RemindBeforeMinutes { get; set; } = new() { 1440, 120, 30 };
+
+    /// <summary>"none", "daily" or "weekly": keep nudging until it's due.</summary>
+    public string Repeat { get; set; } = "none";
+
+    /// <summary>Time of day for daily/weekly nudges.</summary>
+    public TimeSpan RepeatAt { get; set; } = new(9, 0, 0);
+
+    /// <summary>Extra one-off reminders on specific dates.</summary>
+    public List<DateTime> RemindOn { get; set; } = new();
+
+    public DateTime Created { get; set; } = DateTime.Now;
 }
 
 public sealed class AppSettings

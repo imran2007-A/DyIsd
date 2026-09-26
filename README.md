@@ -16,7 +16,7 @@ doesn't show while you're in Chrome.
 | Earbuds | A card when Bluetooth earbuds or headphones connect, with battery level when Windows knows it. |
 | Focus timer | Focus sessions of 15–60 min. **Ctrl + Alt + F** or the Control Center starts one. |
 | Clipboard | What you just copied. Password-manager copies are never shown. |
-| Classes & deadlines | Reminders from your Google Calendar link and deadlines you add. |
+| Classes & deadlines | Reminders from your Google Calendar link and deadlines you add. For each deadline you pick when to be reminded: 1 week / 1 day / 2 hours / 30 min before or when due, daily or weekly until it's due, and extra dates. |
 | Downloads | While a browser downloads, then "Download complete" with Open / Folder. |
 
 Only the newest activity shows at a time.

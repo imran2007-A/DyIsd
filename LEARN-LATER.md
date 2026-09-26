@@ -31,7 +31,7 @@ at the file where it happens.
 - [ ] Battery: polling power status → `Services/BatteryService.cs`
 - [ ] Which app you're in: `SetWinEventHook` → `Services/ForegroundWatcher.cs`
 - [ ] Guessing "AI is working" from CPU time → `Services/AiActivityService.cs`
-- [ ] Drawing animations with math (sin, rotation) instead of image files → `Controls/AiLoader.cs`
+- [ ] Drawing an animation in code (three dots on a circle) → `Controls/Thinking.cs`
 - [ ] Mic/camera in use: the registry Windows keeps for privacy → `Services/PrivacyService.cs`
 - [ ] Bluetooth earbuds: `DeviceWatcher` → `Services/EarbudsService.cs`
 - [ ] Building UI in code instead of XAML → `ControlCenter.xaml.cs` (tiles, deadline rows)

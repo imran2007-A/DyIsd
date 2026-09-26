@@ -64,11 +64,8 @@ public sealed class DownloadState : Observable
 /// <summary>An AI app that's busy in another window.</summary>
 public sealed class AiState : Observable
 {
-    string _name = "", _elapsed = "", _kind = "claude";
+    string _name = "", _elapsed = "";
     Brush _color = Brushes.White;
-
-    /// <summary>Which animation to draw: "claude" or "openai".</summary>
-    public string Kind { get => _kind; set => Set(ref _kind, value); }
 
     public string Name { get => _name; set { if (Set(ref _name, value)) Raise(nameof(Title)); } }
     public string Title => $"{_name} is working";

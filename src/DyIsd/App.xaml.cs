@@ -135,7 +135,6 @@ public partial class App : Application
             c.AiApp = app;
             c.AiSince = DateTime.Now;
             _aiState.Name = app.Name;
-            _aiState.Kind = app.Loader;
             _aiState.Color = ThemeService.Solid(app.Color);
             UpdateAiElapsed();
             c.Render();
@@ -149,7 +148,6 @@ public partial class App : Application
                 {
                     c.AiSince = Ai.WorkingSince(c.AiApp);
                     _aiState.Name = c.AiApp.Name;
-                    _aiState.Kind = c.AiApp.Loader;
                     _aiState.Color = ThemeService.Solid(c.AiApp.Color);
                 }
             }

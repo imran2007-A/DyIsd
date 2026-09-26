@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,6 +30,12 @@ public partial class ControlCenter : Window
     // What's being typed into the "add deadline" form.
     DateTime? _day;
     TimeSpan? _time;
+    static readonly int[] DefaultBefore = { 1440, 120, 30 };
+    readonly HashSet<int> _before = new(DefaultBefore);
+    string _repeat = "none";
+    TimeSpan _repeatAt = new(9, 0, 0);
+    readonly List<DateTime> _extra = new();
+    DateTime _extraDay = DateTime.Today.AddDays(1);
 
     public DateTime ClosedAt { get; private set; }
 
@@ -41,6 +48,7 @@ public partial class ControlCenter : Window
         BuildFocusChips();
         BuildDayChips();
         BuildTimeChips();
+        BuildReminderChips();
         BuildTiles();
         BuildPositions();
         BuildOptions();
@@ -54,6 +62,14 @@ public partial class ControlCenter : Window
             else if (CustomTime.Text.Length > 0) _time = null;
             UpdatePreview();
         };
+
+        RepeatTime.TextChanged += (_, _) =>
+        {
+            if (TryParseTime(RepeatTime.Text, out var t)) _repeatAt = t;
+            else if (RepeatTime.Text.Length == 0) _repeatAt = new TimeSpan(9, 0, 0);
+            UpdatePreview();
+        };
+        ExtraTime.TextChanged += (_, _) => UpdatePreview();
 
         _refresh.Tick += (_, _) => { RefreshDeadlines(); RefreshFocus(); };
         _app.Timer.PropertyChanged += OnTimerChanged;
@@ -177,7 +193,9 @@ public partial class ControlCenter : Window
             text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
             text.Children.Add(new TextBlock
             {
-                Text = When(item) + (item.IsDeadline ? "" : " · Calendar"),
+                Text = When(item) + (!item.IsDeadline ? " · Calendar"
+                    : item.Manual?.Repeat == "daily" ? " · daily reminder"
+                    : item.Manual?.Repeat == "weekly" ? " · weekly reminder" : ""),
                 Style = (Style)FindResource("Sub"),
             });
             Grid.SetColumn(text, 1);
@@ -305,13 +323,129 @@ public partial class ControlCenter : Window
         if (!hasTitle) AddPreview.Text = "";
         else if (due == null) AddPreview.Text = _day == null ? "Pick a day" : "Pick a time";
         else if (due <= DateTime.Now) { AddPreview.Text = "That time has already passed"; AddPreview.Foreground = ThemeService.Brush("Bad"); }
-        else AddPreview.Text = $"Due {DayName(due.Value)} at {due.Value.ToString("h:mm tt", CultureInfo.InvariantCulture)}. Reminders 1 day, 2 hours and 30 min before.";
+        else AddPreview.Text = $"Due {DayName(due.Value)} at {due.Value.ToString("h:mm tt", CultureInfo.InvariantCulture)}. " +
+                               CalendarService.Describe(_before, _repeat, _repeatAt, _extra);
+
+        ExtraDayLabel.Text = DayName(_extraDay);
+        ExtraAdd.IsEnabled = TryParseTime(ExtraTime.Text, out var et) && _extraDay.Date + et > DateTime.Now && (due == null || _extraDay.Date + et < due);
+    }
+
+    // ---- reminders ----
+
+    void BuildReminderChips()
+    {
+        foreach (var (label, minutes) in new[] { ("1 week", 10080), ("1 day", 1440), ("2 hours", 120), ("30 min", 30), ("When due", 0) })
+        {
+            var chip = Chip(label);
+            chip.IsChecked = _before.Contains(minutes);
+            chip.Click += (_, _) =>
+            {
+                if (chip.IsChecked == true) _before.Add(minutes);
+                else _before.Remove(minutes);
+                UpdatePreview();
+            };
+            BeforeChips.Children.Add(chip);
+        }
+
+        foreach (var (label, value) in new[] { ("Off", "none"), ("Daily", "daily"), ("Weekly", "weekly") })
+        {
+            var chip = Chip(label);
+            chip.IsChecked = value == _repeat;
+            chip.Click += (_, _) =>
+            {
+                _repeat = value;
+                foreach (var c in RepeatChips.Children)
+                    if (c is ToggleButton t) t.IsChecked = ReferenceEquals(t, chip);
+                RepeatTimeRow.Visibility = value == "none" ? Visibility.Collapsed : Visibility.Visible;
+                UpdatePreview();
+            };
+            RepeatChips.Children.Insert(RepeatChips.Children.Count - 1, chip);
+        }
+    }
+
+    void ExtraPrev_Click(object s, RoutedEventArgs e)
+    {
+        if (_extraDay > DateTime.Today) _extraDay = _extraDay.AddDays(-1);
+        UpdatePreview();
+    }
+
+    void ExtraNext_Click(object s, RoutedEventArgs e)
+    {
+        _extraDay = _extraDay.AddDays(1);
+        UpdatePreview();
+    }
+
+    void ExtraAdd_Click(object s, RoutedEventArgs e)
+    {
+        if (!TryParseTime(ExtraTime.Text, out var t)) return;
+        var at = _extraDay.Date + t;
+        if (!_extra.Contains(at)) _extra.Add(at);
+        RefreshExtraChips();
+        UpdatePreview();
+    }
+
+    void RefreshExtraChips()
+    {
+        ExtraDates.Children.Clear();
+        foreach (var at in _extra.OrderBy(d => d).ToList())
+        {
+            var chip = new Button
+            {
+                Style = (Style)FindResource("Btn"),
+                Padding = new Thickness(10, 4, 8, 4),
+                Margin = new Thickness(0, 0, 6, 6),
+                ToolTip = "Remove",
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children =
+                    {
+                        new TextBlock { Text = DayName(at) + at.ToString(" · h:mm tt", CultureInfo.InvariantCulture), FontSize = 12 },
+                        new TextBlock { Text = "\uE711", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Margin = new Thickness(8, 1, 0, 0), Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center },
+                    },
+                },
+            };
+            chip.Click += (_, _) =>
+            {
+                _extra.Remove(at);
+                RefreshExtraChips();
+                UpdatePreview();
+            };
+            ExtraDates.Children.Add(chip);
+        }
+    }
+
+    void ResetReminders()
+    {
+        _before.Clear();
+        foreach (var m in DefaultBefore) _before.Add(m);
+        int i = 0;
+        int[] order = { 10080, 1440, 120, 30, 0 };
+        foreach (ToggleButton c in BeforeChips.Children) c.IsChecked = _before.Contains(order[i++]);
+        _repeat = "none";
+        foreach (var c in RepeatChips.Children)
+            if (c is ToggleButton t) t.IsChecked = (string)t.Content == "Off";
+        RepeatTimeRow.Visibility = Visibility.Collapsed;
+        RepeatTime.Text = "";
+        _repeatAt = new TimeSpan(9, 0, 0);
+        _extra.Clear();
+        ExtraTime.Text = "";
+        RefreshExtraChips();
     }
 
     void Add_Click(object sender, RoutedEventArgs e)
     {
         if (DraftDue is not DateTime due || NewTitle.Text.Trim().Length == 0) return;
-        S.ManualDeadlines.Add(new ManualDeadline { Title = NewTitle.Text.Trim(), Due = due });
+        S.ManualDeadlines.Add(new ManualDeadline
+        {
+            Title = NewTitle.Text.Trim(),
+            Due = due,
+            RemindBeforeMinutes = _before.OrderByDescending(m => m).ToList(),
+            Repeat = _repeat,
+            RepeatAt = _repeatAt,
+            RemindOn = _extra.Where(d => d < due).OrderBy(d => d).ToList(),
+            Created = DateTime.Now,
+        });
         SettingsStore.Save();
         NewTitle.Text = "";
         CustomTime.Text = "";
@@ -319,6 +453,7 @@ public partial class ControlCenter : Window
         _time = null;
         UncheckAll(DayChips);
         UncheckAll(TimeChips);
+        ResetReminders();
         RefreshDeadlines();
         UpdatePreview();
         _app.Island?.ShowMessage("", "Good", "Deadline added", 200, 1600);

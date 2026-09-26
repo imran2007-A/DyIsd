@@ -11,7 +11,7 @@ using Ical.Net.DataTypes;
 
 namespace DyIsd.Services;
 
-public sealed record UpcomingItem(string Key, string Title, DateTime Start, bool AllDay, string? Location, bool IsDeadline);
+public sealed record UpcomingItem(string Key, string Title, DateTime Start, bool AllDay, string? Location, bool IsDeadline, ManualDeadline? Manual = null);
 
 /// <summary>
 /// Reads classes and deadlines from a calendar link (Google Calendar's "secret address in iCal
@@ -31,7 +31,6 @@ public sealed class CalendarService
 
     // Reminder lead times.
     static readonly TimeSpan[] EventLeads = { TimeSpan.FromMinutes(60), TimeSpan.FromMinutes(10) };
-    static readonly TimeSpan[] DeadlineLeads = { TimeSpan.FromHours(24), TimeSpan.FromHours(2), TimeSpan.FromMinutes(30) };
 
     public void Start()
     {
@@ -94,7 +93,7 @@ public sealed class CalendarService
     {
         foreach (var i in _feed) yield return i;
         foreach (var d in SettingsStore.Current.ManualDeadlines)
-            yield return new UpcomingItem($"m|{d.Title}|{d.Due:o}", d.Title, d.Due, false, null, true);
+            yield return new UpcomingItem($"m|{d.Title}|{d.Due:o}", d.Title, d.Due, false, null, true, d);
     }
 
     void Check()
@@ -111,14 +110,75 @@ public sealed class CalendarService
                 continue;
             }
 
-            foreach (var lead in item.IsDeadline ? DeadlineLeads : EventLeads)
+            if (item.Manual is { } m)
             {
-                var at = item.Start - lead;
-                if (now >= at && now < at.AddMinutes(3) && _fired.Add(item.Key + "|" + lead.TotalMinutes))
-                    Alert?.Invoke(item, Headline(item, item.Start - now), Detail(item));
+                CheckManual(item, m, now);
+                continue;
             }
+
+            foreach (var lead in EventLeads)
+                Fire(item, "b" + lead.TotalMinutes, item.Start - lead, now);
         }
     }
+
+    /// <summary>Deadlines you added: your chosen "before" times, repeats and extra dates.</summary>
+    void CheckManual(UpcomingItem item, ManualDeadline m, DateTime now)
+    {
+        foreach (int min in m.RemindBeforeMinutes)
+            Fire(item, "b" + min, item.Start.AddMinutes(-min), now);
+
+        foreach (var on in m.RemindOn)
+            Fire(item, "on" + on.Ticks, on, now);
+
+        if (m.Repeat is "daily" or "weekly")
+        {
+            var at = now.Date + m.RepeatAt;
+            // Weekly nudges land on the same weekday as the deadline.
+            bool rightDay = m.Repeat == "daily" || (item.Start.Date - now.Date).Days % 7 == 0;
+            if (rightDay && at < item.Start && at >= m.Created)
+                Fire(item, "r" + now.ToString("yyyyMMdd"), at, now);
+        }
+    }
+
+    /// <summary>Raises the reminder once, if its time came within the last 3 minutes.</summary>
+    void Fire(UpcomingItem item, string key, DateTime at, DateTime now)
+    {
+        if (now < at || now >= at.AddMinutes(3) || !_fired.Add(item.Key + "|" + key)) return;
+        var left = item.Start - now;
+        string headline = left.TotalMinutes < 1 ? $"{item.Title} is due now" : Headline(item, left);
+        Alert?.Invoke(item, headline, Detail(item));
+    }
+
+    /// <summary>Plain-English summary of a deadline's reminders, e.g. "1 day and 2 hours before, and daily at 9:00 AM".</summary>
+    public static string Describe(IEnumerable<int> before, string repeat, TimeSpan repeatAt, IEnumerable<DateTime> on)
+    {
+        var parts = new List<string>();
+        var mins = before.OrderByDescending(m => m).ToList();
+        if (mins.Count > 0)
+        {
+            var names = mins.Where(m => m > 0).Select(BeforeName).ToList();
+            string text = names.Count > 0 ? JoinAnd(names) + " before" : "";
+            if (mins.Contains(0)) text = text.Length > 0 ? text + " and when it's due" : "when it's due";
+            parts.Add(text);
+        }
+        var time = DateTime.Today.Add(repeatAt).ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        if (repeat == "daily") parts.Add($"every day at {time}");
+        if (repeat == "weekly") parts.Add($"every week at {time}");
+        foreach (var d in on.OrderBy(d => d))
+            parts.Add("on " + d.ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture));
+        return parts.Count == 0 ? "No reminders. It will only show in the list." : "Reminds you " + JoinAnd(parts) + ".";
+    }
+
+    public static string BeforeName(int minutes) => minutes switch
+    {
+        >= 10080 when minutes % 10080 == 0 => minutes == 10080 ? "1 week" : $"{minutes / 10080} weeks",
+        >= 1440 when minutes % 1440 == 0 => minutes == 1440 ? "1 day" : $"{minutes / 1440} days",
+        >= 60 when minutes % 60 == 0 => minutes == 60 ? "1 hour" : $"{minutes / 60} hours",
+        _ => $"{minutes} min",
+    };
+
+    static string JoinAnd(IList<string> items) =>
+        items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
     /// <summary>The next thing coming up, for the tray's "What's next".</summary>
     public (string Title, string Detail)? Next()

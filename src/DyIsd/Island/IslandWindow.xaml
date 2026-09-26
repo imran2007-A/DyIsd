@@ -180,14 +180,14 @@
         <!-- ============ AI APP WORKING ============ -->
         <DataTemplate x:Key="ai-c">
             <Grid Margin="8,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
-                <c:AiLoader Width="20" Height="20" HorizontalAlignment="Left" Kind="{Binding Kind}" Fill="{Binding Color}"/>
+                <c:Thinking Width="20" Height="20" HorizontalAlignment="Left" Fill="{Binding Color}"/>
                 <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding Name}" FontWeight="SemiBold" Foreground="{Binding Color}"/>
             </Grid>
         </DataTemplate>
 
         <DataTemplate x:Key="ai-e">
             <DockPanel Margin="16,0" VerticalAlignment="Center">
-                <c:AiLoader DockPanel.Dock="Left" Width="40" Height="40" Kind="{Binding Kind}" Fill="{Binding Color}"/>
+                <c:Thinking DockPanel.Dock="Left" Width="42" Height="42" Fill="{Binding Color}"/>
                 <Button DockPanel.Dock="Right" Style="{StaticResource WhiteBtn}" Content="Open" Tag="jump" Click="OnAction"/>
                 <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
