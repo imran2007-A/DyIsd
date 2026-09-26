@@ -19,7 +19,7 @@ public sealed class AiActivityService
     public static readonly AiApp[] Apps =
     {
         new("claude", "Claude", new[] { "claude" }, Color.FromRgb(0xD9, 0x77, 0x57)),
-        new("chatgpt", "ChatGPT", new[] { "chatgpt" }, Color.FromRgb(0x10, 0xA3, 0x7F)),
+        new("chatgpt", "ChatGPT", new[] { "chatgpt" }, Colors.White),
         new("codex", "Codex", new[] { "codex" }, Color.FromRgb(0xE8, 0xE8, 0xE8)),
     };
 
