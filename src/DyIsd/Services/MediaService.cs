@@ -28,10 +28,6 @@ public sealed class MediaService
     GSMSession? _session;
     TimeSpan _tlPosition, _tlLength;
     DateTimeOffset _tlUpdated;
-    DateTime _pausedAt = DateTime.MinValue;
-
-    // Keep showing a paused song for this long, then hide the island.
-    static readonly TimeSpan PausedLinger = TimeSpan.FromMinutes(2);
 
     public async Task StartAsync()
     {
@@ -115,7 +111,6 @@ public sealed class MediaService
         try
         {
             bool playing = s.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            if (!playing && State.IsPlaying) _pausedAt = DateTime.Now;
             if (playing && !State.IsPlaying) State.ActiveSince = DateTime.Now; // resuming counts as new
             State.IsPlaying = playing;
         }
@@ -173,8 +168,8 @@ public sealed class MediaService
 
     void Recompute()
     {
-        bool active = _session != null && State.Title.Length > 0 &&
-                      (State.IsPlaying || DateTime.Now - _pausedAt < PausedLinger);
+        // Only while something is actually playing: pause or stop and the island hides right away.
+        bool active = _session != null && State.Title.Length > 0 && State.IsPlaying;
         if (active == State.IsActive) return;
         State.IsActive = active;
         if (active) State.ActiveSince = DateTime.Now;

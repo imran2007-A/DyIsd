@@ -7,8 +7,7 @@ doesn't show while you're in Chrome.
 
 | Feature | What it shows |
 |---|---|
-| Now playing | Song, artist, album art, play/pause/skip from Spotify, YouTube in any browser, Media Player, VLC… |
-| AI apps | "Claude is working…" while the Claude, ChatGPT or Codex app is busy and you're in another window, then "finished". |
+| Now playing | Song, artist, album art and controls from Spotify, YouTube in any browser, Media Player, VLC… Only while it's playing: pause and it's gone. |
 | Volume | Replaces the Windows volume pop-up. |
 | Brightness | Pops up when laptop brightness changes. |
 | Battery | Charger plugged in or out, warnings at 15% and 5%. |
@@ -28,7 +27,7 @@ to whatever is underneath (like Chrome tabs). **Hold Alt** to use it:
 
 | | |
 |---|---|
-| Alt + click | Jump to the app (Spotify, Chrome, Claude…) |
+| Alt + click | Jump to the app (Spotify, Chrome…) |
 | Alt + right-click | Expand for controls; stays open until you move away |
 | Alt + drag | Move it to the left, center or right |
 | Alt + scroll | Volume (Shift too for brightness) |
@@ -71,10 +70,6 @@ prototype/island.html    the clickable design prototype (open in any browser)
 
 Built with C#, .NET 10 and WPF. Libraries: NAudio (volume), Ical.Net (calendar),
 System.Management (brightness).
-
-**About the AI indicator:** the Claude, ChatGPT and Codex apps don't tell other apps when
-they're busy, so DyIsd guesses from how much CPU they use. If it triggers too often or too late,
-send `log.txt` (it records the numbers) and the thresholds in `Services/AiActivityService.cs` can be tuned.
 
 ## Build it yourself
 

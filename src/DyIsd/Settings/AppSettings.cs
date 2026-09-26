@@ -15,7 +15,6 @@ public sealed class FeatureFlags
     public bool Clipboard { get; set; } = true;
     public bool Deadlines { get; set; } = true;
     public bool Downloads { get; set; } = true;
-    public bool AiApps { get; set; } = true;
     public bool Privacy { get; set; } = true;
     public bool Earbuds { get; set; } = true;
 }

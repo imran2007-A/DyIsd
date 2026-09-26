@@ -515,7 +515,6 @@ public partial class ControlCenter : Window
     static readonly TileDef[] TileDefs =
     {
         new("Now playing", "", Color.FromRgb(0xFF, 0x37, 0x5F), () => S.Features.Media, v => S.Features.Media = v),
-        new("AI apps", "", Color.FromRgb(0xD9, 0x77, 0x57), () => S.Features.AiApps, v => S.Features.AiApps = v),
         new("Volume", "", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Volume, v => S.Features.Volume = v),
         new("Brightness", "", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Brightness, v => S.Features.Brightness = v),
         new("Battery", "", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Battery, v => S.Features.Battery = v),

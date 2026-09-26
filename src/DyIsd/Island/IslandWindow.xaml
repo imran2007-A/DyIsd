@@ -177,25 +177,6 @@
             </Grid>
         </DataTemplate>
 
-        <!-- ============ AI APP WORKING ============ -->
-        <DataTemplate x:Key="ai-c">
-            <Grid Margin="8,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
-                <c:Thinking Width="20" Height="20" HorizontalAlignment="Left" Fill="{Binding Color}"/>
-                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding Name}" FontWeight="SemiBold" Foreground="{Binding Color}"/>
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="ai-e">
-            <DockPanel Margin="16,0" VerticalAlignment="Center">
-                <c:Thinking DockPanel.Dock="Left" Width="42" Height="42" Fill="{Binding Color}"/>
-                <Button DockPanel.Dock="Right" Style="{StaticResource WhiteBtn}" Content="Open" Tag="jump" Click="OnAction"/>
-                <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding Elapsed}" Style="{StaticResource Mute}" Typography.NumeralAlignment="Tabular"/>
-                </StackPanel>
-            </DockPanel>
-        </DataTemplate>
-
         <!-- ============ VOLUME / BRIGHTNESS ============ -->
         <DataTemplate x:Key="level">
             <Grid Margin="16,0">
@@ -228,7 +209,7 @@
             </Grid>
         </DataTemplate>
 
-        <!-- ============ TWO-LINE CARD (deadline, download done, AI finished, earbuds) ============ -->
+        <!-- ============ TWO-LINE CARD (deadline, download done, earbuds) ============ -->
         <DataTemplate x:Key="card">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>

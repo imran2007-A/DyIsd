@@ -21,7 +21,6 @@ public partial class App : Application
     TrayIcon? _tray;
     ControlCenter? _cc;
     string _lastCalendarUrl = "";
-    readonly AiState _aiState = new();
 
     public IslandController? Island { get; private set; }
     public MediaService Media { get; private set; } = null!;
@@ -34,7 +33,6 @@ public partial class App : Application
     public FocusTimer Timer { get; private set; } = null!;
     public FullscreenWatcher Fullscreen { get; private set; } = null!;
     public ForegroundWatcher Foreground { get; private set; } = null!;
-    public AiActivityService Ai { get; private set; } = null!;
     public PrivacyService Privacy { get; private set; } = null!;
     public EarbudsService Earbuds { get; private set; } = null!;
     public VolumeKeyHook KeyHook { get; private set; } = null!;
@@ -75,13 +73,12 @@ public partial class App : Application
         Timer = new FocusTimer();
         Fullscreen = new FullscreenWatcher();
         Foreground = new ForegroundWatcher();
-        Ai = new AiActivityService();
         Privacy = new PrivacyService();
         Earbuds = new EarbudsService();
         KeyHook = new VolumeKeyHook();
         _messages = new MessageWindow();
 
-        Island = new IslandController(_window, Media.State, Timer, Downloads.State, _aiState, Foreground);
+        Island = new IslandController(_window, Media.State, Timer, Downloads.State, Foreground);
         Wire();
 
         Foreground.Start();
@@ -91,7 +88,6 @@ public partial class App : Application
         Clip.Attach(_messages);
         Downloads.Start();
         Fullscreen.Start();
-        Ai.Start();
         Privacy.Start();
         Earbuds.Start();
         _lastCalendarUrl = S.CalendarUrl;
@@ -128,35 +124,6 @@ public partial class App : Application
             SystemSounds.Asterisk.Play();
             c.ShowMessage("", "Good", "Focus done · take 5", 230, 6000, fullscreenOk: true);
         };
-
-        // AI apps: show the newest one that's working.
-        Ai.Started += app =>
-        {
-            c.AiApp = app;
-            c.AiSince = DateTime.Now;
-            _aiState.Name = app.Name;
-            _aiState.Color = ThemeService.Solid(app.Color);
-            UpdateAiElapsed();
-            c.Render();
-        };
-        Ai.Finished += (app, took) =>
-        {
-            if (c.AiApp == app)
-            {
-                c.AiApp = Ai.Working;
-                if (c.AiApp != null)
-                {
-                    c.AiSince = Ai.WorkingSince(c.AiApp);
-                    _aiState.Name = c.AiApp.Name;
-                    _aiState.Color = ThemeService.Solid(c.AiApp.Color);
-                }
-            }
-            if (S.Features.AiApps && took > TimeSpan.FromSeconds(8)) c.ShowAiFinished(app, took);
-            else c.Render();
-        };
-        var aiClock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        aiClock.Tick += (_, _) => UpdateAiElapsed();
-        aiClock.Start();
 
         // Mic / camera dot.
         Privacy.Changed += () =>
@@ -208,13 +175,6 @@ public partial class App : Application
             }
             return true;
         };
-    }
-
-    void UpdateAiElapsed()
-    {
-        if (Island?.AiApp == null) return;
-        var t = DateTime.Now - Island.AiSince;
-        _aiState.Elapsed = $"In another window · {(int)t.TotalMinutes}:{t.Seconds:00}";
     }
 
     void OnIslandAction(string tag)

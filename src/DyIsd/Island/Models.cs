@@ -61,18 +61,6 @@ public sealed class DownloadState : Observable
     public System.DateTime ActiveSince { get; set; }
 }
 
-/// <summary>An AI app that's busy in another window.</summary>
-public sealed class AiState : Observable
-{
-    string _name = "", _elapsed = "";
-    Brush _color = Brushes.White;
-
-    public string Name { get => _name; set { if (Set(ref _name, value)) Raise(nameof(Title)); } }
-    public string Title => $"{_name} is working";
-    public Brush Color { get => _color; set => Set(ref _color, value); }
-    public string Elapsed { get => _elapsed; set => Set(ref _elapsed, value); }
-}
-
 /// <summary>Volume or brightness pop-up.</summary>
 public sealed class LevelInfo : Observable
 {

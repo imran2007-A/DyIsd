@@ -113,13 +113,6 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .ring .trk{stroke:rgba(255,255,255,.2)}
 .ring .v{stroke:var(--c,#FF9F0A);stroke-dasharray:100;stroke-linecap:round;transition:stroke-dashoffset .5s linear}
 .mono{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:12px}
-/* AI "thinking" indicator: three dots orbiting */
-.think{width:20px;height:20px;position:relative;flex:none}
-.think i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:var(--c);animation:orbit 1.2s linear infinite}
-.think i:nth-child(2){animation-delay:-.4s;opacity:.7}.think i:nth-child(3){animation-delay:-.8s;opacity:.45}
-@keyframes orbit{from{transform:rotate(0) translateX(6px)}to{transform:rotate(360deg) translateX(6px)}}
-.think.lg{width:44px;height:44px}.think.lg i{width:8px;height:8px;margin:-4px;animation-name:orbitlg}
-@keyframes orbitlg{from{transform:rotate(0) translateX(13px)}to{transform:rotate(360deg) translateX(13px)}}
 
 /* mic / camera privacy dot */
 .pdot{position:absolute;top:19px;width:9px;height:9px;border-radius:50%;z-index:11;transition:left .52s cubic-bezier(.3,1.35,.5,1),opacity .25s,transform .35s;opacity:0;transform:scale(.3);pointer-events:none}
@@ -229,7 +222,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .altbtn[aria-pressed=true]{border-color:var(--acc);background:var(--acc);color:var(--surface)}
 .note{font-size:12.5px;color:var(--mute);margin:8px 0 0;line-height:1.5}
 .side{display:grid;gap:16px}
-@media (prefers-reduced-motion: reduce){.island,.cc,.pdot{transition-duration:.01s!important}.content.fade{animation:none}.eq.on i,.think i{animation:none}}
+@media (prefers-reduced-motion: reduce){.island,.cc,.pdot{transition-duration:.01s!important}.content.fade{animation:none}.eq.on i{animation:none}}
 </style>
 
 <main>
@@ -237,7 +230,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
     <img id="logo" alt="" width="44" height="44">
     <div>
       <h1>DyIsd</h1>
-      <p>Hold <kbd>Alt</kbd> over the island to use it. Click the taskbar apps to switch which app you're in: things running in that app hide from the island.</p>
+      <p>Hold <kbd>Alt</kbd> over the island to use it. Click the taskbar apps to switch which app you're in: things running in that app hide from the island. Pause the music and the island vanishes.</p>
     </div>
   </header>
 
@@ -282,7 +275,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
       <section class="panel">
         <h2>Demo</h2>
         <button class="btn primary" id="demoBtn">Run a 30-second demo</button>
-        <p class="note">Music in Spotify while you're in Word, Claude starts working, you copy a link, earbuds connect, your mic turns on, then Claude finishes.</p>
+        <p class="note">Music in Spotify while you're in Word, volume up, you copy a link, earbuds connect, your mic turns on, a download runs, then the music pauses and the island vanishes.</p>
       </section>
     </div>
   </div>
@@ -337,7 +330,6 @@ const I={
   head:sv('<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="14" width="5" height="7" rx="2" fill="currentColor"/>'),
   mic:sv('<rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
   cam:sv('<rect x="3" y="6.5" width="13" height="11" rx="2.5" fill="currentColor"/><path d="m16 10.5 5-3v9l-5-3z" fill="currentColor"/>'),
-  spark:sv('<path d="M12 3c.6 4.5 2.5 6.4 7 7-4.5.6-6.4 2.5-7 7-.6-4.5-2.5-6.4-7-7 4.5-.6 6.4-2.5 7-7z" fill="currentColor"/><path d="M19 3.5v3M17.5 5h3"/>'),
   music:sv('<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/>'),
   x:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
   pin:sv('<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
@@ -346,7 +338,6 @@ const I={
   link:sv('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>')
 };
 const ring=(pct,size,c)=>`<svg class="ring" width="${size}" height="${size}" viewBox="0 0 20 20" style="--c:${c||'#FF9F0A'}"><circle class="trk" cx="10" cy="10" r="8"/><circle class="v js-ring" cx="10" cy="10" r="8" pathLength="100" style="stroke-dashoffset:${100-pct}"/></svg>`;
-const think=(app,lg)=>`<div class="think ${lg?'lg':''}" style="--c:${AI_COLOR[app]}"><i></i><i></i><i></i></div>`;
 const fmt=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -355,23 +346,20 @@ const APPS={
   word:{name:'Word',color:'#185ABD',letter:'W',tab:'CN Unit 3 – Notes.docx',title:'Computer Networks – Unit 3'},
   chrome:{name:'Chrome',color:'#1a73e8',letter:'C',tab:'Hukum (Lyric Video) – YouTube',title:'YouTube'},
   spotify:{name:'Spotify',color:'#1DB954',letter:'S',tab:'Spotify Premium',title:'Liked Songs'},
-  claude:{name:'Claude',color:'#D97757',letter:'✳',tab:'Claude',title:'Claude'},
-  chatgpt:{name:'ChatGPT',color:'#10A37F',letter:'G',tab:'ChatGPT',title:'ChatGPT'},
   vscode:{name:'VS Code',color:'#0078D4',letter:'<>',tab:'island.cs – DyIsd – Visual Studio Code',title:'DyIsd'}
 };
-const TB_ORDER=['word','chrome','spotify','claude','chatgpt','vscode'];
+const TB_ORDER=['word','chrome','spotify','vscode'];
 
 /* ---------- state ---------- */
 const S={
   pos:'center',fg:'word',alt:false,altLock:false,
-  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,ai:true,privacy:true,earbuds:true,deadlines:true,focus:true},
+  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,privacy:true,earbuds:true,deadlines:true,focus:true},
   opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
   timer:{left:1500,total:1500,running:true},
   dl:{pct:0},
-  ai:{app:'claude',since:0},
   vol:62,bri:70,
   mic:null,cam:null,   // app name using it
   popup:null,expanded:false,hover:false,paused:false,
@@ -399,7 +387,6 @@ const TRACKS=[
   {title:'Blinding Lights',artist:'The Weeknd',dur:202,art:'linear-gradient(135deg,#ee0979,#2b1055)'}
 ];
 const trk=()=>TRACKS[S.media.idx];
-const AI_COLOR={claude:'#D97757',chatgpt:'#FFFFFF'};
 
 /* ---------- the desktop ---------- */
 function renderDesktop(){
@@ -415,7 +402,7 @@ $('#tabs').addEventListener('click',e=>{const el=$('#clicklog');el.textContent='
 /* ---------- activities: only the newest one that isn't in the app you're using ---------- */
 function startAct(kind,app){S.acts[kind]={app,since:Date.now()}}
 function stopAct(kind){delete S.acts[kind]}
-const FEAT_OF={media:'media',timer:'focus',download:'downloads',ai:'ai'};
+const FEAT_OF={media:'media',timer:'focus',download:'downloads'};
 function visibleAct(){
   let best=null;
   for(const [k,a] of Object.entries(S.acts)){
@@ -434,8 +421,6 @@ const CV={
     html:`<div class="row compact">${ring(S.timer.left/S.timer.total*100,19)}<div class="grow"></div><span class="lbl tnum js-tleft" style="color:#FF9F0A">${fmt(S.timer.left)}</span></div>`}),
   download:()=>({kind:'dl-c',sig:'',w:150,h:34,r:17,
     html:`<div class="row compact"><div class="ic" style="color:#0A84FF">${I.down}</div><div class="grow"></div><span class="lbl tnum js-dlpct">${Math.floor(S.dl.pct)}%</span></div>`}),
-  ai:()=>{const c=AI_COLOR[S.ai.app];return{kind:'ai-c',sig:S.ai.app,w:190,h:34,r:17,
-    html:`<div class="row compact">${think(S.ai.app)}<div class="grow"></div><span class="lbl" style="color:${c}">${APPS[S.ai.app].name}</span></div>`}}
 };
 const EV={
   media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:m.idx+'|'+m.playing,w:366,h:166,r:34,
@@ -448,8 +433,6 @@ const EV={
   download:()=>({kind:'dl-e',sig:'',w:346,h:94,r:30,
     html:`<div class="row"><div class="ic" style="color:#0A84FF;width:22px;height:22px">${I.down}</div><div class="grow"><div class="t1">CN_Unit3_Notes.pdf</div><div class="t2 tnum js-dlmb">${(18.4*S.dl.pct/100).toFixed(1)} of 18.4 MB · Chrome</div></div><button class="pb sm" data-a="jump">Show</button></div>
     <div class="bar"><i class="js-dlbar" style="width:${S.dl.pct}%;background:#0A84FF"></i></div>`}),
-  ai:()=>{const c=AI_COLOR[S.ai.app];return{kind:'ai-e',sig:S.ai.app,w:340,h:96,r:32,
-    html:`<div class="row">${think(S.ai.app,1)}<div class="grow"><div class="t1">${APPS[S.ai.app].name} is working</div><div class="t2 tnum js-aitime">In another window · ${fmt((Date.now()-S.ai.since)/1000)}</div></div><button class="pb w sm" data-a="jump">Open</button></div>`}}
 };
 const pill=(w,inner,kind)=>({kind,sig:inner,w,h:40,r:20,html:`<div class="row compact">${inner}</div>`});
 const card=(w,h,html,kind)=>({kind,sig:html,w,h,r:Math.min(h/2,30),html});
@@ -463,7 +446,6 @@ const TV={
   deadline:d=>card(360,58,`<div class="row"><div class="ic" style="color:#FF453A">${I.cal}</div><div class="grow"><div class="lbl">${esc(d.t)}</div><div class="t2">${esc(d.s)}</div></div></div>`,'deadline'),
   dldone:()=>card(350,58,`<div class="row"><div class="ic" style="color:#30D158">${I.check}</div><div class="grow"><div class="lbl">Download complete</div><div class="t2">CN_Unit3_Notes.pdf</div></div><button class="pb sm" data-a="dismiss">Open</button></div>`,'dldone'),
   timerdone:()=>pill(260,`<div class="ic" style="color:#30D158">${I.check}</div><span class="lbl">Focus done · take 5</span>`,'timerdone'),
-  aidone:d=>card(340,58,`<div class="row"><div class="ic" style="color:${AI_COLOR[d.app]}">${I.spark}</div><div class="grow"><div class="lbl">${APPS[d.app].name} finished</div><div class="t2">Took ${d.took}</div></div><button class="pb w sm" data-a="jumpai" data-app="${d.app}">Open</button></div>`,'aidone'),
   buds:d=>card(330,58,`<div class="row"><div class="ic" style="width:24px;height:24px">${I.head}</div><div class="grow"><div class="lbl">${d.on?'Galaxy Buds2 Pro':'Galaxy Buds2 Pro'}</div><div class="t2">${d.on?'Connected':'Disconnected'}</div></div>${d.on?`<span class="val" style="color:#30D158;min-width:0">80%</span><div class="ic" style="color:#30D158;width:24px">${I.batt(80)}</div>`:''}</div>`,'buds'),
   privacy:d=>pill(300,`<div class="ic" style="color:${d.cam?'#30D158':'#FF9F0A'}">${d.cam?I.cam:I.mic}</div><span class="lbl">${d.cam?'Camera':'Microphone'} in use · ${d.app}</span>`,'privacy'),
   msg:d=>pill(d.w||300,`<div class="ic" style="color:${d.c||'#fff'}">${d.i}</div><span class="lbl">${d.t}</span>`,'msg')
@@ -505,7 +487,6 @@ function patch(){
   stage.querySelectorAll('.js-dlpct').forEach(e=>e.textContent=Math.floor(S.dl.pct)+'%');
   stage.querySelectorAll('.js-dlbar').forEach(e=>e.style.width=S.dl.pct+'%');
   stage.querySelectorAll('.js-dlmb').forEach(e=>e.textContent=(18.4*S.dl.pct/100).toFixed(1)+' of 18.4 MB · Chrome');
-  stage.querySelectorAll('.js-aitime').forEach(e=>e.textContent='In another window · '+fmt((Date.now()-S.ai.since)/1000));
 }
 
 /* ---------- pop-ups ---------- */
@@ -575,14 +556,13 @@ island.addEventListener('pointerup',endDrag);island.addEventListener('pointercan
 function act(a,el){
   const m=S.media;
   switch(a){
-    case 'toggle':m.playing=!m.playing;break;
+    case 'toggle':m.playing=!m.playing;if(!m.playing){stopAct('media');S.expanded=false}break;
     case 'next':m.idx=(m.idx+1)%TRACKS.length;m.t=0;break;
     case 'prev':if(m.t>3)m.t=0;else{m.idx=(m.idx+2)%3;m.t=0}break;
     case 'tpause':S.timer.running=!S.timer.running;break;
     case 't5':S.timer.left+=300;S.timer.total+=300;break;
     case 'tend':stopAct('timer');S.expanded=false;break;
     case 'jump':{const a2=visibleAct();if(a2)jumpTo(a2.app);return}
-    case 'jumpai':endPop();jumpTo(el.dataset.app);return;
     case 'saver':pop('saver',null,2000);return;
     case 'dismiss':endPop();return;
   }
@@ -592,10 +572,7 @@ function trig(a){
   switch(a){
     case 'spotify':if(!S.f.media)return;S.media.app='spotify';S.media.playing=true;startAct('media','spotify');break;
     case 'youtube':if(!S.f.media)return;S.media.app='chrome';S.media.idx=0;S.media.playing=true;startAct('media','chrome');break;
-    case 'stopmusic':stopAct('media');break;
-    case 'claude':case 'chatgpt':if(!S.f.ai)return;S.ai={app:a,since:Date.now()};startAct('ai',a);break;
-    case 'aifinish':{if(!S.acts.ai)return;const took=fmt((Date.now()-S.ai.since)/1000).replace(':','m ')+'s';const app=S.ai.app;stopAct('ai');
-      if(app===S.fg){render();return}pop('aidone',{app,took},5000);return}
+    case 'stopmusic':case 'pausemusic':S.media.playing=false;stopAct('media');break;
     case 'vol-':case 'vol+':if(!S.f.volume)return;S.vol=Math.max(0,Math.min(100,S.vol+(a==='vol+'?6:-6)));pop('volume',null,1600);return;
     case 'bri-':case 'bri+':if(!S.f.brightness)return;S.bri=Math.max(0,Math.min(100,S.bri+(a==='bri+'?10:-10)));pop('brightness',null,1600);return;
     case 'charge':if(!S.f.battery)return;pop('charge');return;
@@ -627,7 +604,7 @@ setInterval(()=>{if(ccOpen)renderDeadlines()},30000);
 /* ---------- Control Center ---------- */
 let ccOpen=false;
 const TILES=[
-  ['media','Now playing',I.music,'#FF375F'],['ai','AI apps',I.spark,'#D97757'],
+  ['media','Now playing',I.music,'#FF375F'],
   ['volume','Volume',I.spk(70),'#0A84FF'],['brightness','Brightness',I.sun,'#FF9F0A'],
   ['battery','Battery',I.bolt,'#30D158'],['downloads','Downloads',I.down,'#0A84FF'],
   ['clipboard','Clipboard',I.clip,'#5E5CE6'],['earbuds','Earbuds',I.head,'#64D2FF'],
@@ -752,7 +729,7 @@ function draftDue(){if(!draft.day||!draft.time)return null;const [h,m]=draft.tim
 
 cc.addEventListener('click',e=>{
   const tile=e.target.closest('[data-tile]');if(tile){const k=tile.dataset.tile;S.f[k]=!S.f[k];
-    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='ai')stopAct('ai');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
+    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
     save();renderCC();render();return}
   const p=e.target.closest('[data-pos]');if(p){setPos(p.dataset.pos);return}
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
@@ -779,8 +756,7 @@ function setPos(p){S.pos=p;stage.dataset.pos=p;save();render();if(ccOpen){placeC
 
 /* ---------- event simulator ---------- */
 const EVENTS=[
-  ['Music',[['spotify','Play in Spotify'],['youtube','YouTube in Chrome'],['stopmusic','Stop']]],
-  ['AI apps',[['claude','Claude starts working'],['chatgpt','ChatGPT starts'],['aifinish','It finishes']]],
+  ['Music',[['spotify','Play in Spotify'],['youtube','YouTube in Chrome'],['pausemusic','Pause'],['stopmusic','Stop']]],
   ['Volume & brightness',[['vol-','Vol −'],['vol+','Vol +'],['bri-','Bright −'],['bri+','Bright +']]],
   ['Battery',[['charge','Plug in'],['lowbat','Battery low']]],
   ['Earbuds',[['budson','Connect'],['budsoff','Disconnect']]],
@@ -793,7 +769,7 @@ $('#events').addEventListener('click',e=>{const b=e.target.closest('[data-t]');i
 let demoT=[];
 $('#demoBtn').addEventListener('click',()=>{
   demoT.forEach(clearTimeout);demoT=[];S.acts={};S.popup=null;S.mic=S.cam=null;S.fg='word';renderDesktop();render();
-  [[300,'spotify'],[3500,'claude'],[7200,'vol+'],[7700,'vol+'],[10500,'clip'],[14000,'budson'],[18000,'mic'],[22500,'aifinish'],[27500,'mic']]
+  [[300,'spotify'],[3500,'vol+'],[4000,'vol+'],[7000,'clip'],[10500,'budson'],[14500,'mic'],[18500,'download'],[26000,'mic'],[28000,'pausemusic']]
     .forEach(([t,a])=>demoT.push(setTimeout(()=>trig(a),t)));
 });
 
@@ -804,9 +780,8 @@ function clock(){const d=new Date();$('#clockT').textContent=d.toLocaleTimeStrin
 clock();setInterval(clock,15000);
 
 stage.dataset.pos=S.pos;renderDesktop();
-// open in a working state: music in Spotify while you're in Word, Claude working
-startAct('media','spotify');S.ai={app:'claude',since:Date.now()-72000};
-setTimeout(()=>{startAct('ai','claude');render()},1400);
+// open in a working state: music in Spotify while you're in Word
+startAct('media','spotify');
 render();
 })();
 </script>

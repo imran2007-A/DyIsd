@@ -11,7 +11,7 @@ namespace DyIsd.Island;
 
 /// <summary>
 /// Decides what the island shows. Two kinds of things:
-///  - Activities that last: music, focus timer, a download, an AI app working.
+///  - Activities that last: music while it plays, focus timer, a download.
 ///    Only the newest one shows, and never while you're already in the app it belongs to.
 ///  - Pop-ups that come and go: volume, clipboard, battery, earbuds, deadlines...
 ///    They take over for a few seconds, then the island goes back to the activity or hides.
@@ -28,7 +28,6 @@ public sealed class IslandController
     readonly MediaState _media;
     readonly FocusTimer _timer;
     readonly DownloadState _download;
-    readonly AiState _ai;
     readonly ForegroundWatcher _fg;
 
     readonly DispatcherTimer _popupTimer = new();
@@ -41,19 +40,16 @@ public sealed class IslandController
     bool _expanded, _hovering, _fullscreen, _paused;
 
     public string? LastDownloadPath { get; private set; }
-    public AiApp? AiApp { get; set; }
-    public DateTime AiSince { get; set; }
     public (Brush? Brush, string? App) Privacy { get; set; }
 
     static AppSettings S => SettingsStore.Current;
 
-    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, AiState ai, ForegroundWatcher fg)
+    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, ForegroundWatcher fg)
     {
         _win = win;
         _media = media;
         _timer = timer;
         _download = download;
-        _ai = ai;
         _fg = fg;
 
         _popupTimer.Tick += (_, _) => EndPopup();
@@ -115,7 +111,6 @@ public sealed class IslandController
         if (S.Features.Media && _media.IsActive && !_fg.IsAny(_media.Processes)) list.Add(("media", _media.ActiveSince));
         if (S.Features.FocusTimer && _timer.IsActive) list.Add(("timer", _timer.StartedAt));
         if (S.Features.Downloads && _download.IsActive && !_fg.IsAny(AppJumper.Browsers)) list.Add(("download", _download.ActiveSince));
-        if (S.Features.AiApps && AiApp != null && !_fg.IsAny(AiApp.Processes)) list.Add(("ai", AiSince));
         return list.OrderByDescending(a => a.Since).Select(a => a.Kind).FirstOrDefault();
     }
 
@@ -159,7 +154,6 @@ public sealed class IslandController
     {
         "media" => expanded ? ("media-e", _media, 366, 166) : ("media-c", _media, 190, 34),
         "timer" => expanded ? ("timer-e", _timer, 330, 128) : ("timer-c", _timer, 150, 34),
-        "ai" => expanded ? ("ai-e", _ai, 340, 96) : ("ai-c", _ai, 190, 34),
         _ => expanded ? ("dl-e", _download, 346, 94) : ("dl-c", _download, 150, 34),
     };
 
@@ -204,7 +198,6 @@ public sealed class IslandController
         string[]? to = _shownKind switch
         {
             "media" => _media.Processes,
-            "ai" => AiApp?.Processes,
             "download" => AppJumper.Browsers,
             _ => null,
         };
@@ -326,17 +319,6 @@ public sealed class IslandController
             Glyph = "\uE73E", GlyphBrush = B("Good"), Title = "Download complete", Subtitle = System.IO.Path.GetFileName(path),
             Button1 = "Open", Tag1 = "open-file", Button2 = "Folder", Tag2 = "show-file",
         }, 370, 58, 5000);
-    }
-
-    public void ShowAiFinished(AiApp app, TimeSpan took)
-    {
-        if (_fg.IsAny(app.Processes)) return; // you're already looking at it
-        string t = took.TotalMinutes >= 1 ? $"{(int)took.TotalMinutes}m {took.Seconds}s" : $"{took.Seconds}s";
-        ShowPopup("card", "aidone", new InfoCard
-        {
-            Glyph = "\uE73E", GlyphBrush = ThemeService.Solid(app.Color), Title = $"{app.Name} finished", Subtitle = $"Took {t}",
-            Button1 = "Open", Tag1 = "jump:" + string.Join(",", app.Processes),
-        }, 330, 58, 6000, jumpTo: app.Processes);
     }
 
     public void ShowEarbuds(string name, bool connected, int? battery)
