@@ -246,10 +246,10 @@ button{font:inherit;color:inherit}
       <section class="panel" aria-labelledby="dh">
         <h2 id="dh">Demo</h2>
         <div class="demo-row">
-          <button class="btn primary" id="demoBtn">Run a 30-second demo</button>
+          <button class="btn primary" id="demoBtn">Run a 28-second demo</button>
           <button class="btn" id="resetBtn">Clear island</button>
         </div>
-        <p class="note" style="margin-top:10px">Plays a song, changes volume, gets a message, starts a focus timer, copies a link, plugs in the charger, downloads a file, then nudges you off Instagram.</p>
+        <p class="note" style="margin-top:10px">Plays a song, changes volume, gets a message, starts a focus timer, copies a link, plugs in the charger, downloads a file, then reminds you about a deadline.</p>
       </section>
     </div>
   </div>
@@ -311,12 +311,11 @@ const FEATS=[
   {k:'battery',name:'Battery & charging',desc:'Charger plugged in, and a warning at 15%.',acts:[['charge','Plug in'],['lowbat','Battery low']]},
   {k:'notif',name:'Notifications',desc:'Messages from WhatsApp, Discord, Outlook and other apps.',acts:[['notif','New message']]},
   {k:'timer',name:'Focus timer',desc:'25-minute Pomodoro that lives in the island.',acts:[['timer','Start 25 min']]},
-  {k:'nudge',name:'Distraction nudge',desc:'Pokes you when Instagram or Shorts has been open for 15 minutes.',acts:[['nudge','Instagram 15 min']]},
   {k:'clipboard',name:'Clipboard preview',desc:'Shows what you just copied.',acts:[['clip','Copy something']]},
   {k:'deadline',name:'Deadline countdown',desc:'Assignment due times and your next class.',acts:[['deadline','Upcoming deadline']]},
   {k:'download',name:'Downloads',desc:'Progress while a file downloads, then a done alert.',acts:[['download','Download a PDF']]}
 ];
-const ACT_FEAT={media:'media',next:'media',stop:'media','vol-':'volume','vol+':'volume','bri-':'brightness','bri+':'brightness',charge:'battery',lowbat:'battery',notif:'notif',timer:'timer',nudge:'nudge',clip:'clipboard',deadline:'deadline',download:'download'};
+const ACT_FEAT={media:'media',next:'media',stop:'media','vol-':'volume','vol+':'volume','bri-':'brightness','bri+':'brightness',charge:'battery',lowbat:'battery',notif:'notif',timer:'timer',clip:'clipboard',deadline:'deadline',download:'download'};
 
 const S={
   pos:'center',winTheme:'system',accent:'blue',
@@ -367,9 +366,6 @@ const TV={ // transient pop-ups
   lowbat:()=>pill(330,`<div class="ic bad" style="width:22px">${I.batt(15)}</div><span class="lbl">Battery low · 15%</span><div class="grow"></div><button class="pb sm" data-a="saver">Energy saver</button>`,'lowbat'),
   saver:()=>pill(230,`<div class="ic good">${I.leaf}</div><span class="lbl">Energy saver on</span>`,'saver'),
   notif:()=>{const n=NOTIFS[S.ni];return card(384,82,26,`<div class="row"><div class="avatar" style="background:${n.color}">${n.init}</div><div class="grow"><div class="row" style="gap:6px"><span class="t1">${n.who}</span><span class="t2">${n.app} · now</span></div><div class="t2" style="color:var(--i-fg)">${n.text}</div></div><button class="pb sm" data-a="open">Open</button></div>`,'notif')},
-  nudge:()=>card(384,126,28,`<div class="row"><div class="ic lg warn">${I.hour}</div><div class="grow"><div class="t1">15 min on Instagram</div><div class="t2">Chrome tab · You planned CN notes for 9:00 PM</div></div></div>
-    <div class="btns"><button class="pb acc" data-a="nclose">Close tab and focus</button><button class="pb" data-a="nmore">5 more min</button></div>`,'nudge'),
-  nudgeok:()=>pill(300,`<div class="ic good">${I.check}</div><span class="lbl">Tab closed · Focus timer started</span>`,'nudgeok'),
   clip:()=>{const c=CLIPS[S.ci];return card(360,62,22,`<div class="row"><div class="ic acc">${I.clip}</div><div class="grow"><div class="lbl">Copied · ${c.length} characters</div><div class="t2 mono">${c.replace(/</g,'&lt;')}</div></div></div>`,'clip')},
   deadline:()=>{const d=DEADLINES[S.di];return card(360,62,22,`<div class="row"><div class="ic acc">${I.cal}</div><div class="grow"><div class="lbl">${d.t}</div><div class="t2">${d.s}</div></div></div>`,'deadline')},
   dldone:()=>card(344,62,22,`<div class="row"><div class="ic good">${I.check}</div><div class="grow"><div class="lbl">Download complete</div><div class="t2">${S.download.name}</div></div><button class="pb sm" data-a="open">Open</button></div>`,'dldone'),
@@ -440,7 +436,6 @@ function trig(a){
     case 'lowbat': show('lowbat',4500);break;
     case 'notif': S.ni=(S.ni+1)%NOTIFS.length;show('notif',4200);break;
     case 'timer': if(S.timer.on){S.timer.on=false;S.timer.running=false}else startTimer();break;
-    case 'nudge': show('nudge',9000);break;
     case 'clip': S.ci=(S.ci+1)%CLIPS.length;show('clip',2600);break;
     case 'deadline': S.di=(S.di+1)%DEADLINES.length;show('deadline',3600);break;
     case 'download': if(!S.download.on){S.download.on=true;S.download.pct=0;S.primary='download'}break;
@@ -460,8 +455,6 @@ function act(a){
     case 'dcancel': S.download.on=false;S.expanded=false;break;
     case 'saver': show('saver',2000);return;
     case 'open': endT();return;
-    case 'nmore': endT();return;
-    case 'nclose': if(S.features.timer)startTimer();show('nudgeok',2400);return;
   }
   render();syncUI();
 }
@@ -536,7 +529,7 @@ featsEl.addEventListener('change',e=>{
     if(k==='media'){S.media.on=false;S.media.playing=false}
     if(k==='timer'){S.timer.on=false;S.timer.running=false}
     if(k==='download')S.download.on=false;
-    const tk={volume:['volume'],brightness:['brightness'],battery:['charge','lowbat','saver'],notif:['notif'],nudge:['nudge','nudgeok'],clipboard:['clip'],deadline:['deadline'],download:['dldone'],timer:['timerdone']}[k]||[];
+    const tk={volume:['volume'],brightness:['brightness'],battery:['charge','lowbat','saver'],notif:['notif'],clipboard:['clip'],deadline:['deadline'],download:['dldone'],timer:['timerdone']}[k]||[];
     if(tk.includes(S.transient))endT();
   }
   save();render();syncUI();
@@ -581,7 +574,7 @@ function clearAll(){
 $('#resetBtn').addEventListener('click',clearAll);
 $('#demoBtn').addEventListener('click',()=>{
   clearAll();
-  [[300,'media'],[3200,'vol+'],[3700,'vol+'],[6200,'notif'],[11200,'timer'],[13600,'clip'],[17000,'charge'],[20400,'download'],[26200,'nudge']]
+  [[300,'media'],[3200,'vol+'],[3700,'vol+'],[6200,'notif'],[11200,'timer'],[13600,'clip'],[17000,'charge'],[20400,'download'],[25400,'deadline']]
     .forEach(([t,a])=>demoTimers.push(setTimeout(()=>trig(a),t)));
 });
 

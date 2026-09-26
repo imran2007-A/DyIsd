@@ -1,0 +1,38 @@
+name: Build DyIsd
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish app (self-contained, no .NET install needed)
+        run: dotnet publish src/DyIsd/DyIsd.csproj -c Release -r win-x64 --self-contained true -p:Version=0.1.${{ github.run_number }} -o out/app
+
+      - name: Build and sign MSIX installer
+        shell: pwsh
+        run: ./packaging/build-msix.ps1 -AppDir out/app -OutDir out/installer -Version 0.1.${{ github.run_number }}.0
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: DyIsd-installer
+          path: out/installer
+
+      - name: Upload portable version
+        uses: actions/upload-artifact@v4
+        with:
+          name: DyIsd-portable
+          path: out/app
