@@ -20,6 +20,8 @@ public sealed class TrayIcon : IDisposable
     public TrayIcon()
     {
         WF.Application.EnableVisualStyles();
+        // Errors inside tray-menu clicks go to the log instead of a "Microsoft .NET" error box.
+        WF.Application.ThreadException += (_, e) => Log.Error("tray", e.Exception);
         _timerItem = new WF.ToolStripMenuItem("Start focus session", null, (_, _) => ToggleTimer?.Invoke());
         _pauseItem = new WF.ToolStripMenuItem("Pause island", null, (_, _) => PauseChanged?.Invoke(!_pauseItem!.Checked));
 

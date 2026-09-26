@@ -11,15 +11,16 @@ namespace DyIsd.Island;
 
 /// <summary>
 /// Decides what the island shows. Two kinds of things:
-///  - Activities that last: music while it plays, focus timer, a download.
-///    Only the newest one shows, and never while you're already in the app it belongs to.
+///  - Activities that last: a call, music while it plays, focus timer, a download.
+///    A call always wins; otherwise the newest one shows. Never while you're already in the
+///    app it belongs to.
 ///  - Pop-ups that come and go: volume, clipboard, battery, earbuds, deadlines...
 ///    They take over for a few seconds, then the island goes back to the activity or hides.
 /// </summary>
 public sealed class IslandController
 {
     public event Action<string>? ActionRequested;
-    /// <summary>Alt+click on an activity: process names of the app to bring to the front.</summary>
+    /// <summary>Right-click or an open button: process names of the app to bring to the front.</summary>
     public event Action<string[]>? JumpRequested;
     public event Action<int, bool>? WheelRequested;
     public event Action<string>? PositionDropped;
@@ -28,6 +29,7 @@ public sealed class IslandController
     readonly MediaState _media;
     readonly FocusTimer _timer;
     readonly DownloadState _download;
+    readonly CallState _call;
     readonly ForegroundWatcher _fg;
 
     readonly DispatcherTimer _popupTimer = new();
@@ -38,19 +40,34 @@ public sealed class IslandController
     Popup? _popup;
     string? _shownKind;
     bool _expanded, _hovering, _fullscreen, _paused;
+    /// <summary>You paused from the island's player: keep a tiny dot so you can resume.</summary>
+    bool _pausedHere;
+    public string[] CallProcesses { get; set; } = Array.Empty<string>();
 
     public string? LastDownloadPath { get; private set; }
     public (Brush? Brush, string? App) Privacy { get; set; }
 
     static AppSettings S => SettingsStore.Current;
 
-    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, ForegroundWatcher fg)
+    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, CallState call, ForegroundWatcher fg)
     {
         _win = win;
         _media = media;
         _timer = timer;
         _download = download;
+        _call = call;
         _fg = fg;
+        // Playing again (from anywhere) or the player closing clears the paused dot.
+        _media.PropertyChanged += (_, e) =>
+        {
+            if (!_pausedHere) return;
+            if ((e.PropertyName == nameof(MediaState.IsPlaying) && _media.IsPlaying) ||
+                (e.PropertyName == nameof(MediaState.HasSession) && !_media.HasSession))
+            {
+                _pausedHere = false;
+                Render();
+            }
+        };
 
         _popupTimer.Tick += (_, _) => EndPopup();
         _collapseTimer.Tick += (_, _) =>
@@ -66,18 +83,19 @@ public sealed class IslandController
         _win.RightClicked += () =>
         {
             if (_popup != null) { EndPopup(); return; }
-            if (_shownKind == null) return;
-            _expanded = !_expanded;
-            Render();
+            Jump();
         };
         _win.ActionClicked += tag =>
         {
             if (tag == "jump") { Jump(); return; }
             if (tag.StartsWith("jump:")) { EndPopup(); JumpRequested?.Invoke(tag[5..].Split(',')); return; }
             if (tag is "dismiss" or "open-file" or "show-file" or "batt-settings") EndPopup();
+            if (tag == "toggle" && _media.IsPlaying) _pausedHere = true; // pausing from the island
             ActionRequested?.Invoke(tag);
         };
         _win.Wheel += (dir, shift) => WheelRequested?.Invoke(dir, shift);
+        _win.Seek += v => ActionRequested?.Invoke("seek:" + v.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        _win.VolumeSet += v => ActionRequested?.Invoke("volume:" + v.ToString(System.Globalization.CultureInfo.InvariantCulture));
         _win.Dropped += zone => PositionDropped?.Invoke(zone);
     }
 
@@ -107,8 +125,12 @@ public sealed class IslandController
     string? PickActivity()
     {
         if (Quiet) return null;
+        // A call beats everything, like on iPhone.
+        if (S.Features.Calls && _call.IsActive && !_fg.IsAny(CallProcesses)) return "call";
+
         var list = new List<(string Kind, DateTime Since)>();
-        if (S.Features.Media && _media.IsActive && !_fg.IsAny(_media.Processes)) list.Add(("media", _media.ActiveSince));
+        bool mediaOn = _media.IsActive || (_pausedHere && _media.HasSession);
+        if (S.Features.Media && mediaOn && !_fg.IsAny(_media.Processes)) list.Add(("media", _media.ActiveSince));
         if (S.Features.FocusTimer && _timer.IsActive) list.Add(("timer", _timer.StartedAt));
         if (S.Features.Downloads && _download.IsActive && !_fg.IsAny(AppJumper.Browsers)) list.Add(("download", _download.ActiveSince));
         return list.OrderByDescending(a => a.Since).Select(a => a.Kind).FirstOrDefault();
@@ -127,7 +149,6 @@ public sealed class IslandController
         var kind = PickActivity();
         if (kind != _shownKind) _expanded = false;
         _shownKind = kind;
-        _win.Expanded = _expanded;
 
         double? width = null;
         if (_popup != null)
@@ -152,7 +173,10 @@ public sealed class IslandController
 
     (string, object, double, double) Spec(string kind, bool expanded) => kind switch
     {
-        "media" => expanded ? ("media-e", _media, 366, 166) : ("media-c", _media, 190, 34),
+        "media" => expanded ? ("media-e", _media, 366, 208)
+                 : _pausedHere && !_media.IsPlaying ? ("media-dot", _media, 14, 14)
+                 : ("media-c", _media, 190, 34),
+        "call" => expanded ? ("call-e", _call, 360, 84) : ("call-c", _call, 190, 34),
         "timer" => expanded ? ("timer-e", _timer, 330, 128) : ("timer-c", _timer, 150, 34),
         _ => expanded ? ("dl-e", _download, 346, 94) : ("dl-c", _download, 150, 34),
     };
@@ -164,16 +188,11 @@ public sealed class IslandController
         _hovering = inside;
         if (_popup != null)
         {
-            // Holding Alt over a pop-up keeps it on screen.
+            // Resting the mouse on a pop-up keeps it on screen.
             _popupTimer.Stop();
             if (!inside)
             {
                 _popupTimer.Interval = TimeSpan.FromMilliseconds(1400);
-                _popupTimer.Start();
-            }
-            else if (!Native.Win32.AltDown)
-            {
-                _popupTimer.Interval = TimeSpan.FromMilliseconds(2500);
                 _popupTimer.Start();
             }
             return;
@@ -182,32 +201,31 @@ public sealed class IslandController
         else _collapseTimer.Stop();
     }
 
+    /// <summary>Click: open (expand) the activity; click again to close. A pop-up closes.</summary>
     void OnClick()
     {
         if (_popup != null)
         {
             if (_popup.JumpTo != null) { var to = _popup.JumpTo; EndPopup(); JumpRequested?.Invoke(to); }
+            else EndPopup();
             return;
         }
-        Jump();
+        if (_shownKind == null) return;
+        _expanded = !_expanded;
+        Render();
     }
 
-    /// <summary>Alt+click: go to the app the activity belongs to.</summary>
+    /// <summary>Right-click (or the open button): go to the app the activity belongs to.</summary>
     void Jump()
     {
         string[]? to = _shownKind switch
         {
             "media" => _media.Processes,
+            "call" => CallProcesses,
             "download" => AppJumper.Browsers,
             _ => null,
         };
-        if (to == null)
-        {
-            // The timer has no app: a click expands it instead.
-            _expanded = !_expanded;
-            Render();
-            return;
-        }
+        if (to == null) return; // the focus timer has no app
         _expanded = false;
         JumpRequested?.Invoke(to);
     }
@@ -238,6 +256,9 @@ public sealed class IslandController
 
     public void ShowVolume(float level, bool muted)
     {
+        _media.Volume = muted ? 0 : level;
+        // The open player already has a volume slider: no extra pop-up.
+        if (_expanded && _shownKind == "media" && _popup == null) return;
         _volume.Glyph = VolumeService.GlyphFor(level, muted);
         _volume.Value = muted ? 0 : level;
         _volume.Text = muted ? "Mute" : ((int)Math.Round(level * 100)).ToString();

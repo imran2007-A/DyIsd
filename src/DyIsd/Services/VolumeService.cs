@@ -76,6 +76,21 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
         }
     }
 
+    public void SetLevel(double level)
+    {
+        try
+        {
+            if (_device == null) return;
+            var v = _device.AudioEndpointVolume;
+            if (v.Mute && level > 0) v.Mute = false;
+            v.MasterVolumeLevelScalar = (float)Math.Clamp(level, 0, 1);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("volume set", ex);
+        }
+    }
+
     public void ToggleMute()
     {
         try

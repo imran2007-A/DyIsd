@@ -22,3 +22,10 @@ public sealed class NullToCollapsedConverter : IValueConverter
 
     public object ConvertBack(object v, Type t, object p, CultureInfo c) => throw new NotSupportedException();
 }
+
+/// <summary>Shows an element when the bound value is false.</summary>
+public sealed class InverseBoolToVisConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, CultureInfo c) => value is true ? Visibility.Collapsed : Visibility.Visible;
+    public object ConvertBack(object v, Type t, object p, CultureInfo c) => throw new NotSupportedException();
+}

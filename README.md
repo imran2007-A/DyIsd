@@ -7,30 +7,29 @@ doesn't show while you're in Chrome.
 
 | Feature | What it shows |
 |---|---|
-| Now playing | Song, artist, album art and controls from Spotify, YouTube in any browser, Media Player, VLC… Only while it's playing: pause and it's gone. |
+| Now playing | Song, artist, album art. Click to open the player: seek, shuffle, repeat, volume, open the app. Only while it's playing: pause from Spotify and it's gone; pause from the island and it shrinks to a tiny dot you can click to resume. |
+| Calls | WhatsApp, Discord, Teams, Zoom, Telegram: green pill with the call timer and your voice level. Click for who you're talking to, Mute and Go to call. Your Discord mute shortcut shows up on the island too. |
 | Volume | Replaces the Windows volume pop-up. |
 | Brightness | Pops up when laptop brightness changes. |
 | Battery | Charger plugged in or out, warnings at 15% and 5%. |
-| Mic & camera | Orange dot while an app uses your mic, green dot for the camera, like the iPhone. |
+| Camera | Green dot while an app uses your camera, like the iPhone. |
 | Earbuds | A card when Bluetooth earbuds or headphones connect, with battery level when Windows knows it. |
 | Focus timer | Focus sessions of 15–60 min. **Ctrl + Alt + F** or the Control Center starts one. |
 | Clipboard | What you just copied. Password-manager copies are never shown. |
 | Classes & deadlines | Reminders from your Google Calendar link and deadlines you add. For each deadline you pick when to be reminded: 1 week / 1 day / 2 hours / 30 min before or when due, daily or weekly until it's due, and extra dates. |
 | Downloads | While a browser downloads, then "Download complete" with Open / Folder. |
 
-Only the newest activity shows at a time.
-
 ## Using it
 
-The island never gets in your way: move the mouse over it and it fades, and clicks go through
-to whatever is underneath (like Chrome tabs). **Hold Alt** to use it:
+Only the newest activity shows at a time (a call always comes first), and only once you've
+left the app it belongs to: YouTube in Chrome shows when you switch away from Chrome.
 
 | | |
 |---|---|
-| Alt + click | Jump to the app (Spotify, Chrome…) |
-| Alt + right-click | Expand for controls; stays open until you move away |
-| Alt + drag | Move it to the left, center or right |
-| Alt + scroll | Volume (Shift too for brightness) |
+| Click | Open (the player, the call controls…); click again to close |
+| Right-click | Jump to the app (Spotify, Chrome, WhatsApp…) |
+| Drag | Move it to the left, center or right |
+| Scroll | Volume (Shift too for brightness) |
 
 **Control Center:** click the DyIsd icon in the taskbar corner. Turn features on and off, start
 a focus session, add deadlines, paste your calendar link, pick the position.

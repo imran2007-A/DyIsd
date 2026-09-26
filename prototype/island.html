@@ -67,8 +67,26 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .stage[data-pos=left] .island{transform-origin:0 0}
 .stage[data-pos=right] .island{transform-origin:100% 0}
 .island.hidden{opacity:0;transform:scale(.5);pointer-events:none}
-.island.ghost{opacity:.28;pointer-events:none}
-.island.alt{box-shadow:0 0 0 1.5px rgba(255,255,255,.55);cursor:pointer}
+.island{cursor:pointer}
+.slider{position:relative;flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.2);cursor:pointer;touch-action:none}
+.slider::before{content:"";position:absolute;inset:-9px 0}
+.slider i{position:absolute;left:0;top:0;bottom:0;background:#fff;border-radius:inherit;pointer-events:none}
+.slider:hover{height:7px;margin:-1px 0}
+.pl-row{display:grid;grid-template-columns:repeat(5,1fr);justify-items:center;align-items:center}
+.ib.dim{opacity:.45}.ib.small{width:30px;height:30px;padding:7px}
+.vol-row{display:flex;align-items:center;gap:10px;padding:0 4px;color:rgba(255,255,255,.55)}
+.vol-row .ic{width:14px;height:14px;color:rgba(255,255,255,.55)}
+.wave{display:flex;gap:2.5px;align-items:center;height:16px}
+.wave i{width:3px;border-radius:2px;background:#30D158;height:30%;animation:wv .45s ease-in-out infinite alternate}
+.wave i:nth-child(2){animation-duration:.35s}.wave i:nth-child(3){animation-duration:.5s}.wave i:nth-child(4){animation-duration:.4s}.wave i:nth-child(5){animation-duration:.3s}
+@keyframes wv{from{height:20%}to{height:100%}}
+.cbtn{width:44px;height:44px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;padding:11px;flex:none}
+.cbtn svg{width:100%;height:100%}
+.cbtn.mute{background:rgba(255,255,255,.18);color:#fff}.cbtn.mute.on{background:#fff;color:#000}
+.cbtn.go{background:#30D158;color:#000}
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font:700 17px/1 var(--ios);color:#fff;flex:none}
+.kbd-btn{border:0;background:#2c2c2e;color:#fff;border-radius:10px;padding:7px 12px;font:600 12.5px/1 var(--ios);cursor:pointer;white-space:nowrap}
+.kbd-btn.listen{background:#0A84FF}
 .island.dragging{transition:width .52s var(--spring),height .52s var(--spring),border-radius .52s var(--spring);cursor:grabbing}
 .content{position:absolute;inset:0;padding:0 12px;display:flex;flex-direction:column;justify-content:center;gap:10px}
 .content.fade{animation:cin .42s ease both}
@@ -230,7 +248,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
     <img id="logo" alt="" width="44" height="44">
     <div>
       <h1>DyIsd</h1>
-      <p>Hold <kbd>Alt</kbd> over the island to use it. Click the taskbar apps to switch which app you're in: things running in that app hide from the island. Pause the music and the island vanishes.</p>
+      <p>Click the island to open it. Click the taskbar apps to switch which app you're in: things running in that app only show once you leave it. Pause the music and the island vanishes.</p>
     </div>
   </header>
 
@@ -259,7 +277,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
       </div>
     </div>
   </div>
-  <p class="hint"><span><b>Hold Alt</b> + click: jump to the app</span><span><b>Alt</b> + right-click: expand</span><span><b>Alt</b> + drag: move left / center / right</span><span><b>Alt</b> + scroll: volume</span><span>Mouse over without Alt: fades so you can click what's under it</span><span>Tray icon: Control Center</span></p>
+  <p class="hint"><span><b>Click</b>: open</span><span><b>Right-click</b>: jump to the app</span><span><b>Drag</b>: move left / center / right</span><span><b>Scroll</b>: volume</span><span><b>Tray icon</b>: Control Center</span></p>
 
   <div class="grid">
     <section class="panel" aria-labelledby="eh">
@@ -268,14 +286,9 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
     </section>
     <div class="side">
       <section class="panel">
-        <h2>No keyboard? Hold this instead</h2>
-        <button class="altbtn" id="altBtn" aria-pressed="false">Alt</button>
-        <p class="note">Tap to lock Alt on, tap again to release. On a real laptop you just hold the Alt key.</p>
-      </section>
-      <section class="panel">
         <h2>Demo</h2>
         <button class="btn primary" id="demoBtn">Run a 30-second demo</button>
-        <p class="note">Music in Spotify while you're in Word, volume up, you copy a link, earbuds connect, your mic turns on, a download runs, then the music pauses and the island vanishes.</p>
+        <p class="note">Music in Spotify while you're in Word, volume up, earbuds connect, a WhatsApp call starts (the call takes over the island), you mute, the call ends, then the music pauses and the island vanishes.</p>
       </section>
     </div>
   </div>
@@ -332,6 +345,11 @@ const I={
   cam:sv('<rect x="3" y="6.5" width="13" height="11" rx="2.5" fill="currentColor"/><path d="m16 10.5 5-3v9l-5-3z" fill="currentColor"/>'),
   music:sv('<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5" fill="currentColor"/><circle cx="17.5" cy="16" r="2.5" fill="currentColor"/>'),
   x:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
+  phone:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6.6 3.5c.5-.3 1.2-.2 1.6.3l2 2.6c.4.5.4 1.2 0 1.7l-1.1 1.4c1 2 2.6 3.6 4.6 4.6l1.4-1.1c.5-.4 1.2-.4 1.7 0l2.6 2c.5.4.6 1.1.3 1.6l-1 1.8c-.6 1-1.8 1.5-2.9 1.2C10 18.3 5.7 14 4.4 8.3c-.3-1.1.2-2.3 1.2-2.9z"/></svg>',
+  micoff:sv('<path d="M9 9v2a3 3 0 0 0 5 2.2M15 10V6a3 3 0 0 0-5.7-1.3"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.6 2.7M12 17.5V21M3.5 3.5l17 17"/>'),
+  shuffle:sv('<path d="M3.5 7h3.2c2 0 3.4 1 4.4 2.8l1.8 3.4c1 1.8 2.4 2.8 4.4 2.8h3.2M3.5 17h3.2c1.3 0 2.3-.4 3.1-1.2M14.2 8.2c.8-.8 1.8-1.2 3.1-1.2h3.2M18 4.5 20.5 7 18 9.5M18 14.5l2.5 2.5-2.5 2.5"/>'),
+  repeat:sv('<path d="M4 12V9.5A3.5 3.5 0 0 1 7.5 6H19M16.5 3.5 19 6l-2.5 2.5M20 12v2.5a3.5 3.5 0 0 1-3.5 3.5H5M7.5 20.5 5 18l2.5-2.5"/>'),
+  open:sv('<path d="M14 4h6v6M20 4l-8 8M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>'),
   pin:sv('<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
   eye:sv('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'),
   power:sv('<path d="M12 3v8M6.5 6.5a7.5 7.5 0 1 0 11 0"/>'),
@@ -346,14 +364,17 @@ const APPS={
   word:{name:'Word',color:'#185ABD',letter:'W',tab:'CN Unit 3 – Notes.docx',title:'Computer Networks – Unit 3'},
   chrome:{name:'Chrome',color:'#1a73e8',letter:'C',tab:'Hukum (Lyric Video) – YouTube',title:'YouTube'},
   spotify:{name:'Spotify',color:'#1DB954',letter:'S',tab:'Spotify Premium',title:'Liked Songs'},
+  whatsapp:{name:'WhatsApp',color:'#25D366',letter:'W',tab:'WhatsApp',title:'Rahul · voice call'},
+  discord:{name:'Discord',color:'#5865F2',letter:'D',tab:'#general | DyIsd Squad - Discord',title:'DyIsd Squad · General voice'},
   vscode:{name:'VS Code',color:'#0078D4',letter:'<>',tab:'island.cs – DyIsd – Visual Studio Code',title:'DyIsd'}
 };
-const TB_ORDER=['word','chrome','spotify','vscode'];
+const TB_ORDER=['word','chrome','spotify','whatsapp','discord','vscode'];
 
 /* ---------- state ---------- */
 const S={
-  pos:'center',fg:'word',alt:false,altLock:false,
-  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,privacy:true,earbuds:true,deadlines:true,focus:true},
+  pos:'center',fg:'word',pausedHere:false,shuffle:false,repeat:0,
+  call:{app:'whatsapp',who:'Rahul',since:0,muted:false},discordKey:'Ctrl + Shift + M',
+  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,calls:true,earbuds:true,deadlines:true,focus:true},
   opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true},
   focusMin:25,
   acts:{},             // kind -> {app, since}
@@ -402,31 +423,41 @@ $('#tabs').addEventListener('click',e=>{const el=$('#clicklog');el.textContent='
 /* ---------- activities: only the newest one that isn't in the app you're using ---------- */
 function startAct(kind,app){S.acts[kind]={app,since:Date.now()}}
 function stopAct(kind){delete S.acts[kind]}
-const FEAT_OF={media:'media',timer:'focus',download:'downloads'};
+const FEAT_OF={media:'media',timer:'focus',download:'downloads',call:'calls'};
 function visibleAct(){
+  const c=S.acts.call;
+  if(c&&S.f.calls&&c.app!==S.fg)return {kind:'call',...c}; // a call beats everything
   let best=null;
   for(const [k,a] of Object.entries(S.acts)){
+    if(k==='call')continue;
     if(!S.f[FEAT_OF[k]])continue;
     if(a.app&&a.app===S.fg)continue; // you're already in that app
     if(!best||a.since>best.since)best={kind:k,...a};
   }
+  if(!best&&S.pausedHere&&S.f.media&&S.media.app!==S.fg)best={kind:'media',app:S.media.app,since:0};
   return best;
 }
 
 /* ---------- views ---------- */
 const CV={
-  media:()=>({kind:'media-c',sig:S.media.idx+'|'+S.media.playing,w:190,h:34,r:17,
+  media:()=>S.pausedHere&&!S.media.playing?{kind:'media-dot',sig:'',w:14,h:14,r:7,html:''}:({kind:'media-c',sig:S.media.idx+'|'+S.media.playing,w:190,h:34,r:17,
     html:`<div class="row compact"><div class="art sm" style="background:${trk().art}"></div><div class="grow"></div><div class="eq ${S.media.playing?'on':''}" style="--c:${S.media.app==='spotify'?'#1DB954':'#fff'}"><i></i><i></i><i></i><i></i></div></div>`}),
   timer:()=>({kind:'timer-c',sig:'',w:150,h:34,r:17,
     html:`<div class="row compact">${ring(S.timer.left/S.timer.total*100,19)}<div class="grow"></div><span class="lbl tnum js-tleft" style="color:#FF9F0A">${fmt(S.timer.left)}</span></div>`}),
   download:()=>({kind:'dl-c',sig:'',w:150,h:34,r:17,
     html:`<div class="row compact"><div class="ic" style="color:#0A84FF">${I.down}</div><div class="grow"></div><span class="lbl tnum js-dlpct">${Math.floor(S.dl.pct)}%</span></div>`}),
+  call:()=>({kind:'call-c',sig:String(S.call.muted),w:190,h:34,r:17,
+    html:`<div class="row compact"><div class="ic" style="color:#30D158">${I.phone}</div><span class="lbl tnum js-calltime" style="color:#30D158">${fmt((Date.now()-S.call.since)/1000)}</span><div class="grow"></div>${S.call.muted?`<div class="ic" style="color:#FF453A">${I.micoff}</div>`:'<div class="wave"><i></i><i></i><i></i><i></i><i></i></div>'}</div>`}),
 };
 const EV={
-  media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:m.idx+'|'+m.playing,w:366,h:166,r:34,
-    html:`<div class="row"><div class="art lg" style="background:${t.art}"></div><div class="grow"><div class="t1">${t.title}</div><div class="t2">${t.artist}</div></div><span class="src"><i style="background:${APPS[m.app].color}"></i>${m.app==='chrome'?'YouTube · Chrome':'Spotify'}</span></div>
-    <div class="prog"><span class="tnum js-cur">${fmt(m.t)}</span><div class="bar"><i class="js-prog" style="width:${m.t/t.dur*100}%"></i></div><span class="tnum">-${fmt(t.dur-m.t)}</span></div>
-    <div class="ctrls"><button class="ib flip" data-a="prev" aria-label="Previous">${I.next}</button><button class="ib big" data-a="toggle" aria-label="${m.playing?'Pause':'Play'}">${m.playing?I.pause:I.play}</button><button class="ib" data-a="next" aria-label="Next">${I.next}</button></div>`}},
+  media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:[m.idx,m.playing,S.shuffle,S.repeat].join('|'),w:366,h:208,r:34,
+    html:`<div class="row"><div class="art lg" style="background:${t.art}"></div><div class="grow"><div class="t1">${t.title}</div><div class="t2">${t.artist}</div><div class="t2" style="font-size:11px">${m.app==='chrome'?'YouTube · Chrome':'Spotify'}</div></div><button class="ib small" data-a="jump" aria-label="Open the app" style="align-self:flex-start">${I.open}</button></div>
+    <div class="prog"><span class="tnum js-cur" style="width:30px">${fmt(m.t)}</span><div class="slider" data-slider="seek"><i class="js-prog" style="width:${m.t/t.dur*100}%"></i></div><span class="tnum js-rem" style="width:34px;text-align:right">-${fmt(t.dur-m.t)}</span></div>
+    <div class="pl-row"><button class="ib small ${S.shuffle?'':'dim'}" data-a="shuffle" aria-label="Shuffle" aria-pressed="${S.shuffle}">${I.shuffle}</button><button class="ib flip" data-a="prev" aria-label="Previous">${I.next}</button><button class="ib big" data-a="toggle" aria-label="${m.playing?'Pause':'Play'}">${m.playing?I.pause:I.play}</button><button class="ib" data-a="next" aria-label="Next">${I.next}</button><button class="ib small ${S.repeat?'':'dim'}" data-a="repeat" aria-label="Repeat" style="position:relative">${I.repeat}${S.repeat===1?'<b style="position:absolute;font:700 8px var(--ios);right:4px;bottom:3px">1</b>':''}</button></div>
+    <div class="vol-row"><div class="ic">${I.spk(20)}</div><div class="slider" data-slider="vol"><i class="js-vol" style="width:${S.vol}%"></i></div><div class="ic">${I.spk(100)}</div></div>`}},
+  call:()=>({kind:'call-e',sig:String(S.call.muted),w:360,h:84,r:34,
+    html:`<div class="row"><div class="avatar" style="background:${APPS[S.call.app].color}">${esc(S.call.who[0])}</div><div class="grow"><div class="t1" style="font-size:15px">${esc(S.call.who)}</div><div class="t2 tnum js-callsub">${APPS[S.call.app].name} · ${fmt((Date.now()-S.call.since)/1000)}</div></div>
+    <button class="cbtn mute ${S.call.muted?'on':''}" data-a="mute" aria-label="${S.call.muted?'Unmute':'Mute'}">${S.call.muted?I.micoff:I.mic}</button><button class="cbtn go" data-a="jump" aria-label="Go to the call">${I.open}</button></div>`}),
   timer:()=>({kind:'timer-e',sig:String(S.timer.running),w:330,h:128,r:32,
     html:`<div class="row">${ring(S.timer.left/S.timer.total*100,48)}<div class="grow"><div class="bigtime js-tleft" style="color:#FF9F0A">${fmt(S.timer.left)}</div><div class="t2">Focus · ${Math.round(S.timer.total/60)} min session</div></div></div>
     <div class="btns"><button class="pb w" data-a="tpause">${S.timer.running?'Pause':'Resume'}</button><button class="pb" data-a="t5">+5 min</button><button class="pb" data-a="tend">End</button></div>`}),
@@ -471,8 +502,8 @@ function render(){
   placeDot(v.w);patch();updateGhost();
 }
 function placeDot(w){
-  const on=S.f.privacy&&(S.mic||S.cam);
-  pdot.className='pdot'+(on?' on':'')+(S.cam?' cam':' mic');
+  const on=S.f.calls&&S.cam;
+  pdot.className='pdot cam'+(on?' on':'');
   if(!on)return;
   const hidden=w==null;const l=hidden?leftFor(9):leftFor(w);
   pdot.style.top=hidden?'14px':'20px';
@@ -482,6 +513,10 @@ function patch(){
   const m=S.media,t=trk();
   stage.querySelectorAll('.js-prog').forEach(e=>e.style.width=(m.t/t.dur*100)+'%');
   stage.querySelectorAll('.js-cur').forEach(e=>e.textContent=fmt(m.t));
+  stage.querySelectorAll('.js-rem').forEach(e=>e.textContent='-'+fmt(t.dur-m.t));
+  stage.querySelectorAll('.js-vol').forEach(e=>e.style.width=S.vol+'%');
+  stage.querySelectorAll('.js-calltime').forEach(e=>e.textContent=fmt((Date.now()-S.call.since)/1000));
+  stage.querySelectorAll('.js-callsub').forEach(e=>e.textContent=APPS[S.call.app].name+' · '+fmt((Date.now()-S.call.since)/1000));
   stage.querySelectorAll('.js-tleft').forEach(e=>e.textContent=fmt(S.timer.left));
   stage.querySelectorAll('.js-ring').forEach(e=>e.style.strokeDashoffset=100-S.timer.left/S.timer.total*100);
   stage.querySelectorAll('.js-dlpct').forEach(e=>e.textContent=Math.floor(S.dl.pct)+'%');
@@ -491,54 +526,52 @@ function patch(){
 
 /* ---------- pop-ups ---------- */
 let pT=null;
-function pop(kind,data,ms=2800){if(S.paused)return;S.popup={kind,data};S.expanded=false;clearTimeout(pT);if(!(S.hover&&isAlt()))pT=setTimeout(endPop,ms);render()}
+function pop(kind,data,ms=2800){if(S.paused)return;S.popup={kind,data};S.expanded=false;clearTimeout(pT);if(!S.hover)pT=setTimeout(endPop,ms);render()}
 function endPop(){clearTimeout(pT);S.popup=null;render()}
 
-/* ---------- Alt + hover: fade and let clicks through, unless Alt is held ---------- */
-function isAlt(){return S.alt||S.altLock}
-function updateGhost(){
-  const active=!island.classList.contains('hidden');
-  const interactive=active&&(isAlt()||S.expanded);
-  island.classList.toggle('alt',active&&isAlt()&&S.hover);
-  island.classList.toggle('ghost',active&&S.hover&&!interactive);
-}
+/* ---------- mouse: click opens, right-click jumps to the app, drag moves, scroll = volume ---------- */
+function updateGhost(){}
 function islandRect(){return{l:parseFloat(island.style.left)||0,t:8,w:island.offsetWidth,h:island.offsetHeight}}
+function setHover(inside){
+  if(inside===S.hover)return;S.hover=inside;
+  if(!inside&&S.expanded){clearTimeout(colT);colT=setTimeout(()=>{if(!S.hover&&!slide){S.expanded=false;render()}},700)}
+  if(inside&&S.popup)clearTimeout(pT);
+  if(!inside&&S.popup){clearTimeout(pT);pT=setTimeout(endPop,1400)}
+}
 stage.addEventListener('pointermove',e=>{
   const b=stage.getBoundingClientRect();const x=(e.clientX-b.left)/scale,y=(e.clientY-b.top)/scale;
-  const r=islandRect();const inside=x>=r.l-4&&x<=r.l+r.w+4&&y>=r.t-4&&y<=r.t+r.h+4;
-  if(inside!==S.hover){S.hover=inside;
-    if(!inside&&S.expanded){clearTimeout(colT);colT=setTimeout(()=>{if(!S.hover){S.expanded=false;render()}},600)}
-    if(inside&&S.popup&&isAlt())clearTimeout(pT);
-    if(!inside&&S.popup){clearTimeout(pT);pT=setTimeout(endPop,1400)}
-  }
-  updateGhost();
+  const r=islandRect();setHover(x>=r.l-4&&x<=r.l+r.w+4&&y>=r.t-4&&y<=r.t+r.h+4);
 });
-stage.addEventListener('pointerleave',()=>{S.hover=false;updateGhost()});
+stage.addEventListener('pointerleave',e=>{
+  // Letting go of a captured pointer fires a fake "leave"; only react if the pointer really left.
+  const b=stage.getBoundingClientRect();if(e.clientX>b.left&&e.clientX<b.right&&e.clientY>b.top&&e.clientY<b.bottom)return;
+  setHover(false)});
 let colT;
-window.addEventListener('keydown',e=>{if(e.key==='Alt'){e.preventDefault();if(!S.alt){S.alt=true;updateGhost()}}});
-window.addEventListener('keyup',e=>{if(e.key==='Alt'){e.preventDefault();S.alt=false;updateGhost()}});
-window.addEventListener('blur',()=>{S.alt=false;updateGhost()});
-$('#altBtn').addEventListener('click',()=>{S.altLock=!S.altLock;$('#altBtn').setAttribute('aria-pressed',S.altLock);updateGhost()});
-
-/* Alt + click jumps to the app; Alt + right-click expands */
 island.addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(b){e.stopPropagation();act(b.dataset.a,b);return}
-  if(dragMoved)return;
-  if(S.popup)return;
-  const a=visibleAct();if(!a)return;
-  if(!S.expanded){jumpTo(a.app||null)}
-});
-island.addEventListener('contextmenu',e=>{
-  e.preventDefault();if(S.popup)return;
+  if(dragMoved||e.target.closest('[data-slider]'))return;
+  if(S.popup){endPop();return}
   if(visibleAct()){S.expanded=!S.expanded;render()}
 });
-function jumpTo(app){if(!app){S.expanded=true;render();return}S.fg=app;S.expanded=false;renderDesktop();render()}
-island.addEventListener('wheel',e=>{if(!isAlt()||!S.f.volume)return;e.preventDefault();trig(e.deltaY<0?'vol+':'vol-')},{passive:false});
+island.addEventListener('contextmenu',e=>{
+  e.preventDefault();if(S.popup){endPop();return}
+  const a=visibleAct();if(a&&a.app)jumpTo(a.app);
+});
+function jumpTo(app){if(!app)return;S.fg=app;S.expanded=false;renderDesktop();render()}
+island.addEventListener('wheel',e=>{if(!S.f.volume)return;e.preventDefault();S.vol=Math.max(0,Math.min(100,S.vol+(e.deltaY<0?4:-4)));if(S.expanded&&visibleAct()?.kind==='media')patch();else pop('volume',null,1600)},{passive:false});
 
-/* Alt + drag to move */
+/* sliders in the player: seek and volume */
+let slide=null;
+function slideTo(e){const r=slide.el.getBoundingClientRect();const v=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  if(slide.kind==='seek'){S.media.t=Math.round(v*trk().dur)}else{S.vol=Math.round(v*100)}patch()}
+
+/* drag to move */
 let drag=null,dragMoved=false;
 island.addEventListener('pointerdown',e=>{
   if(e.button!==0||e.target.closest('button'))return;
+  const sl=e.target.closest('[data-slider]');
+  if(sl){slide={el:sl,kind:sl.dataset.slider};sl.setPointerCapture(e.pointerId);slideTo(e);
+    sl.onpointermove=ev=>{if(slide)slideTo(ev)};sl.onpointerup=()=>{slide=null};return}
   dragMoved=false;drag={x:e.clientX,start:parseFloat(island.style.left)||0,moved:false};island.setPointerCapture(e.pointerId);
 });
 island.addEventListener('pointermove',e=>{
@@ -556,13 +589,18 @@ island.addEventListener('pointerup',endDrag);island.addEventListener('pointercan
 function act(a,el){
   const m=S.media;
   switch(a){
-    case 'toggle':m.playing=!m.playing;if(!m.playing){stopAct('media');S.expanded=false}break;
+    case 'toggle':m.playing=!m.playing;
+      if(!m.playing){stopAct('media');S.pausedHere=true}   // paused from the island: player stays open, then shrinks to a dot
+      else{S.pausedHere=false;startAct('media',m.app)}break;
+    case 'shuffle':S.shuffle=!S.shuffle;break;
+    case 'repeat':S.repeat=(S.repeat+1)%3;break;
+    case 'mute':S.call.muted=!S.call.muted;break;
     case 'next':m.idx=(m.idx+1)%TRACKS.length;m.t=0;break;
     case 'prev':if(m.t>3)m.t=0;else{m.idx=(m.idx+2)%3;m.t=0}break;
     case 'tpause':S.timer.running=!S.timer.running;break;
     case 't5':S.timer.left+=300;S.timer.total+=300;break;
     case 'tend':stopAct('timer');S.expanded=false;break;
-    case 'jump':{const a2=visibleAct();if(a2)jumpTo(a2.app);return}
+    case 'jump':{const a2=visibleAct();if(a2&&a2.app)jumpTo(a2.app);return}
     case 'saver':pop('saver',null,2000);return;
     case 'dismiss':endPop();return;
   }
@@ -570,9 +608,12 @@ function act(a,el){
 }
 function trig(a){
   switch(a){
-    case 'spotify':if(!S.f.media)return;S.media.app='spotify';S.media.playing=true;startAct('media','spotify');break;
-    case 'youtube':if(!S.f.media)return;S.media.app='chrome';S.media.idx=0;S.media.playing=true;startAct('media','chrome');break;
-    case 'stopmusic':case 'pausemusic':S.media.playing=false;stopAct('media');break;
+    case 'spotify':if(!S.f.media)return;S.media.app='spotify';S.media.playing=true;S.pausedHere=false;startAct('media','spotify');break;
+    case 'youtube':if(!S.f.media)return;S.media.app='chrome';S.media.idx=0;S.media.playing=true;S.pausedHere=false;startAct('media','chrome');break;
+    case 'stopmusic':case 'pausemusic':S.media.playing=false;S.pausedHere=false;stopAct('media');break;
+    case 'wacall':case 'dcall':if(!S.f.calls)return;S.call={app:a==='wacall'?'whatsapp':'discord',who:a==='wacall'?'Rahul':'DyIsd Squad',since:Date.now(),muted:false};startAct('call',S.call.app);break;
+    case 'dmute':if(!S.acts.call)return;S.call.muted=!S.call.muted;break;
+    case 'endcall':stopAct('call');S.expanded=false;break;
     case 'vol-':case 'vol+':if(!S.f.volume)return;S.vol=Math.max(0,Math.min(100,S.vol+(a==='vol+'?6:-6)));pop('volume',null,1600);return;
     case 'bri-':case 'bri+':if(!S.f.brightness)return;S.bri=Math.max(0,Math.min(100,S.bri+(a==='bri+'?10:-10)));pop('brightness',null,1600);return;
     case 'charge':if(!S.f.battery)return;pop('charge');return;
@@ -581,8 +622,7 @@ function trig(a){
     case 'download':if(!S.f.downloads)return;S.dl.pct=0;startAct('download','chrome');break;
     case 'budson':if(!S.f.earbuds)return;pop('buds',{on:true},3200);return;
     case 'budsoff':if(!S.f.earbuds)return;pop('buds',{on:false},2200);return;
-    case 'mic':S.mic=S.mic?null:'Discord';if(S.mic&&S.f.privacy)pop('privacy',{app:'Discord'},2200);else render();return;
-    case 'cam':S.cam=S.cam?null:'Google Meet';if(S.cam&&S.f.privacy)pop('privacy',{app:'Google Meet',cam:1},2200);else render();return;
+    case 'cam':S.cam=S.cam?null:'Google Meet';if(S.cam&&S.f.calls)pop('privacy',{app:'Google Meet',cam:1},2200);else render();return;
     case 'deadline':{if(!S.f.deadlines)return;const d=[...S.deadlines].sort((a,b)=>a.due-b.due)[0];if(!d)return;pop('deadline',{t:`${d.title} ${d.cal?'in':'due in'} ${human(d.due-Date.now())}`,s:whenText(d.due)},5000);return}
     case 'focus':startFocus();break;
   }
@@ -608,7 +648,7 @@ const TILES=[
   ['volume','Volume',I.spk(70),'#0A84FF'],['brightness','Brightness',I.sun,'#FF9F0A'],
   ['battery','Battery',I.bolt,'#30D158'],['downloads','Downloads',I.down,'#0A84FF'],
   ['clipboard','Clipboard',I.clip,'#5E5CE6'],['earbuds','Earbuds',I.head,'#64D2FF'],
-  ['privacy','Mic & camera',I.mic,'#FF9F0A'],['deadlines','Deadlines',I.cal,'#FF453A'],
+  ['calls','Calls & camera',I.phone,'#30D158'],['deadlines','Deadlines',I.cal,'#FF453A'],
   ['focus','Focus timer',I.moon,'#BF5AF2']
 ];
 const OPTS=[
@@ -622,7 +662,7 @@ function renderCC(){
   const posMini=p=>`<span class="mini"><i style="left:${p==='left'?3:p==='right'?27:15}px"></i></span>`;
   const on=k=>S.f[k];
   cc.innerHTML=`
-  <div class="cc-head"><img src="${ICON}" alt=""><div><div class="t">DyIsd</div><div class="s">Hold Alt over the island to use it</div></div>
+  <div class="cc-head"><img src="${ICON}" alt=""><div><div class="t">DyIsd</div><div class="s">Click the island to open it · right-click to jump to the app</div></div>
     <button class="ib cc-x" data-cc="close" aria-label="Close">${I.x}</button></div>
 
   <div class="focus-tile">
@@ -664,10 +704,18 @@ function renderCC(){
   <div class="seg">${['left','center','right'].map(p=>`<button data-pos="${p}" aria-pressed="${S.pos===p}">${posMini(p)}${p[0].toUpperCase()+p.slice(1)}</button>`).join('')}</div>
 
   <h4>Options</h4>
-  <div class="opts">${OPTS.map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
+  <div class="opts">${OPTS.slice(0,3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
+    <div class="opt"><span class="on-l"><b>Discord mute shortcut</b><span>Same keys as in Discord. The island shows when you're muted. Backspace clears it.</span></span><button class="kbd-btn" id="kbdBtn">${S.discordKey||'Set'}</button></div>
+    ${OPTS.slice(3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
 
   <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
   renderDeadlines();wireAdd();
+  const kb=$('#kbdBtn');kb.addEventListener('click',()=>{kb.textContent='Press keys…';kb.classList.add('listen');
+    const on=e=>{if(['Control','Alt','Shift','Meta'].includes(e.key))return;e.preventDefault();
+      if(e.key==='Backspace'||e.key==='Escape')S.discordKey='';
+      else S.discordKey=[e.ctrlKey&&'Ctrl',e.altKey&&'Alt',e.shiftKey&&'Shift',e.metaKey&&'Win',e.key.length===1?e.key.toUpperCase():e.key].filter(Boolean).join(' + ');
+      kb.textContent=S.discordKey||'Set';kb.classList.remove('listen');window.removeEventListener('keydown',on,true)};
+    window.addEventListener('keydown',on,true)});
 }
 function human(ms){const m=Math.round(ms/MIN);if(m<60)return m+' min';const h=Math.floor(m/60),r=m%60;if(h<48)return r?`${h}h ${r}m`:`${h}h`;return Math.round(h/24)+' days'}
 function whenText(t){const d=new Date(t),td=new Date();const tm=d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'}).toUpperCase();
@@ -729,7 +777,7 @@ function draftDue(){if(!draft.day||!draft.time)return null;const [h,m]=draft.tim
 
 cc.addEventListener('click',e=>{
   const tile=e.target.closest('[data-tile]');if(tile){const k=tile.dataset.tile;S.f[k]=!S.f[k];
-    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
+    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='calls')stopAct('call');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
     save();renderCC();render();return}
   const p=e.target.closest('[data-pos]');if(p){setPos(p.dataset.pos);return}
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
@@ -760,7 +808,8 @@ const EVENTS=[
   ['Volume & brightness',[['vol-','Vol −'],['vol+','Vol +'],['bri-','Bright −'],['bri+','Bright +']]],
   ['Battery',[['charge','Plug in'],['lowbat','Battery low']]],
   ['Earbuds',[['budson','Connect'],['budsoff','Disconnect']]],
-  ['Mic & camera',[['mic','Discord mic on/off'],['cam','Meet camera on/off']]],
+  ['Calls',[['wacall','WhatsApp call'],['dcall','Discord voice'],['dmute','Press Discord mute key'],['endcall','End call']]],
+  ['Camera',[['cam','Meet camera on/off']]],
   ['Everything else',[['clip','Copy a link'],['download','Download a PDF'],['deadline','Deadline reminder'],['focus','Start focus']]]
 ];
 $('#events').innerHTML=EVENTS.map(([g,bs])=>`<div class="ev-g"><b>${g}</b><div>${bs.map(([a,l])=>`<button class="btn" data-t="${a}">${l}</button>`).join('')}</div></div>`).join('');
@@ -768,8 +817,8 @@ $('#events').addEventListener('click',e=>{const b=e.target.closest('[data-t]');i
 
 let demoT=[];
 $('#demoBtn').addEventListener('click',()=>{
-  demoT.forEach(clearTimeout);demoT=[];S.acts={};S.popup=null;S.mic=S.cam=null;S.fg='word';renderDesktop();render();
-  [[300,'spotify'],[3500,'vol+'],[4000,'vol+'],[7000,'clip'],[10500,'budson'],[14500,'mic'],[18500,'download'],[26000,'mic'],[28000,'pausemusic']]
+  demoT.forEach(clearTimeout);demoT=[];S.acts={};S.popup=null;S.cam=null;S.pausedHere=false;S.fg='word';renderDesktop();render();
+  [[300,'spotify'],[3500,'vol+'],[4000,'vol+'],[7000,'budson'],[11000,'wacall'],[16000,'dmute'],[20000,'dmute'],[23000,'endcall'],[27000,'pausemusic']]
     .forEach(([t,a])=>demoT.push(setTimeout(()=>trig(a),t)));
 });
 

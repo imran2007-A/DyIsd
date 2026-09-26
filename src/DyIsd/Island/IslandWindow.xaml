@@ -5,7 +5,7 @@
         Title="DyIsd island"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" ShowActivated="False"
-        Width="420" Height="210"
+        Width="420" Height="250"
         FontFamily="{StaticResource UiFont}" FontSize="13"
         Foreground="{DynamicResource IslandFg}"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
@@ -95,31 +95,110 @@
         </DataTemplate>
 
         <DataTemplate x:Key="media-e">
-            <Grid Margin="16,14,16,8">
+            <Grid Margin="16,14,16,12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <DockPanel>
                     <Border DockPanel.Dock="Left" Width="56" Height="56" CornerRadius="12" Background="{Binding ArtBrush}"/>
-                    <TextBlock DockPanel.Dock="Right" VerticalAlignment="Top" Text="{Binding Source}" FontSize="11" Foreground="{DynamicResource IslandMute}"/>
-                    <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconBtn}" Content="&#xE8A7;" FontSize="13" Width="30" Height="30" VerticalAlignment="Top"
+                            Tag="jump" Click="OnAction" ToolTip="Open the app"/>
+                    <StackPanel Margin="12,0,6,0" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding Artist}" Style="{StaticResource Mute}" Margin="0,1,0,0"/>
+                        <TextBlock Text="{Binding Source}" FontSize="11" Foreground="{DynamicResource IslandMute}" Margin="0,2,0,0"/>
                     </StackPanel>
                 </DockPanel>
+
+                <!-- drag to seek -->
                 <DockPanel Grid.Row="1" Margin="0,12,0,0" Visibility="{Binding HasTimeline, Converter={StaticResource BoolToVis}}">
-                    <TextBlock DockPanel.Dock="Left" Text="{Binding PositionText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding RemainingText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular"/>
-                    <c:ProgressLine Height="5" Margin="10,0" VerticalAlignment="Center" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="White"/>
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding PositionText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular" Width="34"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding RemainingText}" FontSize="11" Foreground="{DynamicResource IslandMute}" Typography.NumeralAlignment="Tabular" Width="38" TextAlignment="Right"/>
+                    <c:ProgressLine Height="5" Margin="6,0" VerticalAlignment="Center" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="White"
+                                    Interactive="True" IsEnabled="{Binding CanSeek}" ValueChosen="OnSeek" Cursor="Hand"/>
                 </DockPanel>
-                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Button Style="{StaticResource IconBtn}" Content="&#xE892;" Tag="prev" Click="OnAction" ToolTip="Previous"/>
-                    <Button Style="{StaticResource IconBtn}" Content="{Binding PlayGlyph}" Tag="toggle" Click="OnAction" FontSize="22" Width="44" Height="44" Margin="18,0" ToolTip="Play / pause"/>
-                    <Button Style="{StaticResource IconBtn}" Content="&#xE893;" Tag="next" Click="OnAction" ToolTip="Next"/>
-                </StackPanel>
+
+                <!-- shuffle, previous, play/pause, next, repeat -->
+                <Grid Grid.Row="2" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource IconBtn}" Content="&#xE8B1;" FontSize="14" Foreground="{Binding ShuffleBrush}" Tag="shuffle" Click="OnAction" IsEnabled="{Binding CanShuffle}" ToolTip="Shuffle"/>
+                    <Button Grid.Column="1" Style="{StaticResource IconBtn}" Content="&#xE892;" Tag="prev" Click="OnAction" ToolTip="Previous"/>
+                    <Button Grid.Column="2" Style="{StaticResource IconBtn}" Content="{Binding PlayGlyph}" Tag="toggle" Click="OnAction" FontSize="22" Width="44" Height="44" ToolTip="Play / pause"/>
+                    <Button Grid.Column="3" Style="{StaticResource IconBtn}" Content="&#xE893;" Tag="next" Click="OnAction" ToolTip="Next"/>
+                    <Button Grid.Column="4" Style="{StaticResource IconBtn}" Content="{Binding RepeatGlyph}" FontSize="14" Foreground="{Binding RepeatBrush}" Tag="repeat" Click="OnAction" IsEnabled="{Binding CanRepeat}" ToolTip="Repeat"/>
+                </Grid>
+
+                <!-- volume -->
+                <DockPanel Grid.Row="3" Margin="4,8,4,0">
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="&#xE993;" FontSize="12" Foreground="{DynamicResource IslandMute}"/>
+                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Glyph}" Text="&#xE995;" FontSize="12" Foreground="{DynamicResource IslandMute}"/>
+                    <c:ProgressLine Height="5" Margin="10,0" VerticalAlignment="Center" Value="{Binding Volume}" Track="{DynamicResource IslandTrack}" Fill="White"
+                                    Interactive="True" LiveUpdate="True" ValueChosen="OnVolume" Cursor="Hand"/>
+                </DockPanel>
             </Grid>
+        </DataTemplate>
+
+        <!-- paused from the island: a tiny dot you can click to reopen the player -->
+        <DataTemplate x:Key="media-dot">
+            <Grid/>
+        </DataTemplate>
+
+        <!-- ============ CALLS (like iPhone) ============ -->
+        <DataTemplate x:Key="call-c">
+            <Grid Margin="11,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE717;" Foreground="{DynamicResource Good}" FontSize="15"/>
+                    <TextBlock Text="{Binding Elapsed}" FlowDirection="LeftToRight" Foreground="{DynamicResource Good}" FontWeight="SemiBold" Margin="7,0,0,0" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                </StackPanel>
+                <Grid HorizontalAlignment="Right" Width="24" Height="16">
+                    <c:VoiceWave Level="{Binding Level}" Fill="{DynamicResource Good}" Visibility="{Binding Muted, Converter={StaticResource InverseBoolToVis}}"/>
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xEC54;" FontSize="14" Foreground="{DynamicResource Bad}" HorizontalAlignment="Center"
+                               Visibility="{Binding Muted, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="call-e">
+            <DockPanel Margin="16,0" VerticalAlignment="Center">
+                <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="22" Background="{DynamicResource Chip}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE717;" Foreground="{DynamicResource Good}" FontSize="18" HorizontalAlignment="Center"/>
+                </Border>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Tag="mute" Click="OnAction" Width="44" Height="44" Focusable="False" Cursor="Hand" ToolTip="Mute / unmute">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="B" CornerRadius="22" Background="{Binding MuteBack}">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="{Binding MuteGlyph}" Foreground="{Binding MuteFore}" FontSize="17" HorizontalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.7"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button Tag="jump" Click="OnAction" Width="44" Height="44" Margin="10,0,0,0" Focusable="False" Cursor="Hand" ToolTip="Go to the call">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="B" CornerRadius="22" Background="{DynamicResource Good}">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE8A7;" Foreground="Black" FontSize="16" HorizontalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.7"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+                <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Who}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Mute}" Typography.NumeralAlignment="Tabular"/>
+                </StackPanel>
+            </DockPanel>
         </DataTemplate>
 
         <!-- ============ FOCUS TIMER ============ -->
@@ -257,16 +336,17 @@
                 CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource Radius}}"
                 ClipToBounds="True"
                 MouseLeftButtonDown="Pill_MouseLeftButtonDown" MouseMove="Pill_MouseMove" MouseLeftButtonUp="Pill_MouseLeftButtonUp"
-                MouseRightButtonUp="Pill_MouseRightButtonUp" MouseWheel="Pill_MouseWheel">
+                MouseRightButtonUp="Pill_MouseRightButtonUp" MouseWheel="Pill_MouseWheel"
+                MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave" Cursor="Hand">
             <Border.RenderTransform>
                 <ScaleTransform x:Name="PillScale" ScaleX="0.5" ScaleY="0.5"/>
             </Border.RenderTransform>
             <ContentPresenter x:Name="Presenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- mic (orange) / camera (green) in use -->
+        <!-- camera in use (green, like iPhone) -->
         <Ellipse x:Name="PrivacyDot" Width="9" Height="9" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="14,20,14,0"
-                 Opacity="0" IsHitTestVisible="False" Fill="{DynamicResource Orange}">
+                 Opacity="0" IsHitTestVisible="False" Fill="{DynamicResource Good}">
             <Ellipse.RenderTransform>
                 <TranslateTransform x:Name="DotShift"/>
             </Ellipse.RenderTransform>

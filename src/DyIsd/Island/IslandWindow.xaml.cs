@@ -18,12 +18,8 @@ namespace DyIsd.Island;
 /// The always-on-top window at the top of the screen. It only draws, animates and reports input;
 /// IslandController decides what to show.
 ///
-/// How the mouse works:
-///  - Normally the island lets every click pass through to the app underneath (Chrome tabs etc.),
-///    and fades when your mouse is over it so you can see what's below.
-///  - Hold Alt over it and it turns solid and clickable: Alt+click jumps to the app,
-///    Alt+right-click expands it, Alt+drag moves it, Alt+scroll changes volume.
-///  - Once expanded it stays clickable until your mouse leaves it.
+/// Mouse: click opens (expands), right-click jumps to the app, drag moves it to the left, center
+/// or right, scroll changes volume. Clicks never go to the app underneath.
 /// </summary>
 public partial class IslandWindow : Window
 {
@@ -31,35 +27,29 @@ public partial class IslandWindow : Window
     public event Action? RightClicked;
     public event Action<string>? ActionClicked;
     public event Action<int, bool>? Wheel;
+    /// <summary>Seek bar let go at 0..1.</summary>
+    public event Action<double>? Seek;
+    /// <summary>Volume slider dragged to 0..1.</summary>
+    public event Action<double>? VolumeSet;
     public event Action<string>? Dropped;
     /// <summary>True when the mouse enters the island, false when it leaves.</summary>
     public event Action<bool>? HoverChanged;
 
-    const double WinWidth = 420, WinHeight = 210, Gap = 14;
-    static readonly Brush AltBorder = ThemeService.Solid(Color.FromArgb(0x8C, 0xFF, 0xFF, 0xFF));
+    const double WinWidth = 420, WinHeight = 250, Gap = 14;
 
     readonly IEasingFunction _spring = new SpringEase();
     readonly IEasingFunction _smooth = new CubicEase { EasingMode = EasingMode.EaseOut };
-    readonly DispatcherTimer _track = new() { Interval = TimeSpan.FromMilliseconds(30) };
     string? _templateKey, _logicalKind;
-    bool _shown, _hover, _interactive = true, _ghost;
+    bool _shown, _hover;
     string _pos = "center";
-
-    /// <summary>Set by the controller while the island is expanded: stays clickable without Alt.</summary>
-    public bool Expanded { get; set; }
 
     public IslandWindow()
     {
         InitializeComponent();
         Width = WinWidth;
         Height = WinHeight;
-        SourceInitialized += (_, _) =>
-        {
-            SetExStyle(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, true);
-            SetInteractive(false);
-        };
+        SourceInitialized += (_, _) => SetExStyle(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, true);
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => ApplyPosition(SettingsStore.Current.Position));
-        _track.Tick += (_, _) => Track();
         ApplyPosition(SettingsStore.Current.Position);
     }
 
@@ -73,14 +63,6 @@ public partial class IslandWindow : Window
         ex = on ? ex | flags : ex & ~flags;
         if (flags == (Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE)) ex &= ~Win32.WS_EX_APPWINDOW;
         Win32.SetWindowLongPtr(h, Win32.GWL_EXSTYLE, (IntPtr)ex);
-    }
-
-    /// <summary>Clickable, or clicks fall through to the window underneath.</summary>
-    void SetInteractive(bool on)
-    {
-        if (on == _interactive) return;
-        _interactive = on;
-        SetExStyle(Win32.WS_EX_TRANSPARENT, !on);
     }
 
     void EnsureTopmost()
@@ -162,10 +144,10 @@ public partial class IslandWindow : Window
             Pill.Width = width;
             Pill.Height = height;
             EnsureTopmost();
-            Animate(Pill, OpacityProperty, _ghost ? 0.28 : 1, 200, _smooth);
+            Pill.IsHitTestVisible = true;
+            Animate(Pill, OpacityProperty, 1, 200, _smooth);
             Animate(PillScale, ScaleTransform.ScaleXProperty, 1);
             Animate(PillScale, ScaleTransform.ScaleYProperty, 1);
-            _track.Start();
             return;
         }
 
@@ -178,12 +160,10 @@ public partial class IslandWindow : Window
         if (!_shown) return;
         _shown = false;
         _templateKey = _logicalKind = null;
-        Expanded = false;
+        Pill.IsHitTestVisible = false;
         Animate(Pill, OpacityProperty, 0, 200, _smooth);
         Animate(PillScale, ScaleTransform.ScaleXProperty, 0.5, 260, _smooth);
         Animate(PillScale, ScaleTransform.ScaleYProperty, 0.5, 260, _smooth);
-        _track.Stop();
-        SetInteractive(false);
         if (_hover)
         {
             _hover = false;
@@ -214,38 +194,6 @@ public partial class IslandWindow : Window
         Animate(DotShift, TranslateTransform.XProperty, shift);
     }
 
-    // ---------- mouse tracking (runs while the island is visible) ----------
-
-    void Track()
-    {
-        if (!_shown || !Win32.GetCursorPos(out var p)) return;
-        Point pt;
-        try { pt = PointFromScreen(new Point(p.X, p.Y)); }
-        catch { return; }
-
-        var r = Pill.TransformToAncestor(Root).TransformBounds(new Rect(0, 0, Pill.ActualWidth, Pill.ActualHeight));
-        r.Inflate(2, 2);
-        bool inside = r.Contains(pt);
-        bool alt = Win32.AltDown;
-
-        if (inside != _hover)
-        {
-            _hover = inside;
-            HoverChanged?.Invoke(inside);
-        }
-
-        bool interactive = inside && (alt || Expanded) || _down != null;
-        SetInteractive(interactive);
-
-        bool ghost = inside && !interactive;
-        if (ghost != _ghost)
-        {
-            _ghost = ghost;
-            Animate(Pill, OpacityProperty, ghost ? 0.28 : 1, 150, _smooth);
-        }
-        Pill.BorderBrush = inside && alt ? AltBorder : (Brush)FindResource("IslandBorder");
-    }
-
     // ---------- input ----------
 
     void OnAction(object sender, RoutedEventArgs e)
@@ -256,9 +204,32 @@ public partial class IslandWindow : Window
     void Pill_MouseWheel(object sender, MouseWheelEventArgs e) =>
         Wheel?.Invoke(e.Delta > 0 ? 1 : -1, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
+    void OnSeek(object sender, RoutedEventArgs e)
+    {
+        if (sender is ProgressLine p) Seek?.Invoke(p.ChosenValue);
+    }
+
+    void OnVolume(object sender, RoutedEventArgs e)
+    {
+        if (sender is ProgressLine p) VolumeSet?.Invoke(p.ChosenValue);
+    }
+
+    void Pill_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_hover) return;
+        _hover = true;
+        HoverChanged?.Invoke(true);
+    }
+
+    void Pill_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (!_hover || _down != null) return;
+        _hover = false;
+        HoverChanged?.Invoke(false);
+    }
+
     void Pill_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (Win32.AltDown) Win32.CancelAltMenu();
         RightClicked?.Invoke();
         e.Handled = true;
     }
@@ -276,7 +247,6 @@ public partial class IslandWindow : Window
 
     void Pill_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (Win32.AltDown) Win32.CancelAltMenu();
         _down = ScreenDip(e);
         _downLeft = Left;
         _dragging = false;

@@ -521,7 +521,7 @@ public partial class ControlCenter : Window
         new("Downloads", "", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Downloads, v => S.Features.Downloads = v),
         new("Clipboard", "", Color.FromRgb(0x5E, 0x5C, 0xE6), () => S.Features.Clipboard, v => S.Features.Clipboard = v),
         new("Earbuds", "", Color.FromRgb(0x64, 0xD2, 0xFF), () => S.Features.Earbuds, v => S.Features.Earbuds = v),
-        new("Mic & camera", "", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Privacy, v => S.Features.Privacy = v),
+        new("Calls & camera", "\uE717", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Calls, v => { S.Features.Calls = v; S.Features.Privacy = v; }),
         new("Deadlines", "", Color.FromRgb(0xFF, 0x45, 0x3A), () => S.Features.Deadlines, v => S.Features.Deadlines = v),
         new("Focus timer", "", Color.FromRgb(0xBF, 0x5A, 0xF2), () => S.Features.FocusTimer, v => S.Features.FocusTimer = v),
     };
@@ -618,6 +618,8 @@ public partial class ControlCenter : Window
         AddOption("Hide in full-screen", "Games and videos stay clean. Volume still shows.",
             () => S.HideInFullscreen, v => S.HideInFullscreen = v);
 
+        AddShortcutOption();
+
         var startup = AddOption("Start with Windows", null, () => false, _ => { });
         startup.IsEnabled = false;
         _ = LoadStartupAsync(startup);
@@ -636,6 +638,62 @@ public partial class ControlCenter : Window
                 _app.Island?.ShowMessage("", "Orange", message, 420, 5000);
             }
         };
+    }
+
+    /// <summary>Record your Discord mute shortcut: click the button, then press the keys.</summary>
+    void AddShortcutOption()
+    {
+        var btn = new Button { Style = (Style)FindResource("Btn"), Content = ShortcutText(), VerticalAlignment = VerticalAlignment.Center, MinWidth = 90 };
+        bool listening = false;
+        btn.Click += (_, _) =>
+        {
+            listening = true;
+            btn.Content = "Press keys…";
+            btn.Focus();
+        };
+        btn.PreviewKeyDown += (_, e) =>
+        {
+            if (!listening) return;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+            e.Handled = true;
+            listening = false;
+            if (key is Key.Escape or Key.Back or Key.Delete)
+            {
+                S.DiscordMuteKey = 0;
+                S.DiscordMuteModifiers = 0;
+            }
+            else
+            {
+                S.DiscordMuteKey = KeyInterop.VirtualKeyFromKey(key);
+                S.DiscordMuteModifiers = Native.Win32.CurrentModifiers();
+            }
+            SettingsStore.Save();
+            btn.Content = ShortcutText();
+        };
+        btn.LostFocus += (_, _) => { if (listening) { listening = false; btn.Content = ShortcutText(); } };
+
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Discord mute shortcut", FontSize = 13.5 });
+        text.Children.Add(new TextBlock { Text = "Same keys as in Discord. The island shows when you're muted. Backspace clears it.", Style = (Style)FindResource("Sub") });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(btn, Dock.Right);
+        row.Children.Add(btn);
+        row.Children.Add(text);
+        Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    static string ShortcutText()
+    {
+        if (S.DiscordMuteKey == 0) return "Set";
+        int m = S.DiscordMuteModifiers;
+        var parts = new List<string>();
+        if ((m & Native.Win32.MOD_KEY_CTRL) != 0) parts.Add("Ctrl");
+        if ((m & Native.Win32.MOD_KEY_ALT) != 0) parts.Add("Alt");
+        if ((m & Native.Win32.MOD_KEY_SHIFT) != 0) parts.Add("Shift");
+        if ((m & Native.Win32.MOD_KEY_WIN) != 0) parts.Add("Win");
+        parts.Add(KeyInterop.KeyFromVirtualKey(S.DiscordMuteKey).ToString());
+        return string.Join(" + ", parts);
     }
 
     ToggleButton AddOption(string title, string? help, Func<bool> get, Action<bool> set)
@@ -679,7 +737,7 @@ public partial class ControlCenter : Window
 
     // ================= helpers =================
 
-    ToggleButton Chip(string text) => new() { Style = (Style)FindResource("Chip"), Content = text };
+    ToggleButton Chip(string text) => new() { Style = (Style)FindResource("ChipToggle"), Content = text };
 
     static void UncheckAll(Panel panel)
     {

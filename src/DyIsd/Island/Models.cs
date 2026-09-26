@@ -46,6 +46,24 @@ public sealed class MediaState : Observable
     public Brush BarBrush { get => _bar; set => Set(ref _bar, value); }
     public string RemainingText { get => _remaining; set => Set(ref _remaining, value); }
     string _remaining = "";
+
+    bool _hasSession, _shuffle, _canShuffle, _canRepeat, _canSeek;
+    int _repeat;
+    double _volume;
+    /// <summary>A player exists and has a song loaded (playing or paused).</summary>
+    public bool HasSession { get => _hasSession; set => Set(ref _hasSession, value); }
+    public bool Shuffle { get => _shuffle; set { if (Set(ref _shuffle, value)) Raise(nameof(ShuffleBrush)); } }
+    /// <summary>0 = off, 1 = repeat this song, 2 = repeat all.</summary>
+    public int Repeat { get => _repeat; set { if (Set(ref _repeat, value)) { Raise(nameof(RepeatBrush)); Raise(nameof(RepeatGlyph)); } } }
+    public bool CanShuffle { get => _canShuffle; set => Set(ref _canShuffle, value); }
+    public bool CanRepeat { get => _canRepeat; set => Set(ref _canRepeat, value); }
+    public bool CanSeek { get => _canSeek; set => Set(ref _canSeek, value); }
+    public double Volume { get => _volume; set => Set(ref _volume, value); }
+    static readonly Brush Off = MakeBrush(0x80);
+    static Brush MakeBrush(byte a) { var b = new SolidColorBrush(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }
+    public Brush ShuffleBrush => _shuffle ? Brushes.White : Off;
+    public Brush RepeatBrush => _repeat != 0 ? Brushes.White : Off;
+    public string RepeatGlyph => _repeat == 1 ? "\uE8ED" : "\uE8EE";
 }
 
 /// <summary>What the download view shows.</summary>
@@ -59,6 +77,30 @@ public sealed class DownloadState : Observable
     public string ShortText { get => _short; set => Set(ref _short, value); }
     public bool IsActive { get => _active; set => Set(ref _active, value); }
     public System.DateTime ActiveSince { get; set; }
+}
+
+/// <summary>A WhatsApp / Discord / Teams call in progress.</summary>
+public sealed class CallState : Observable
+{
+    string _app = "", _who = "", _elapsed = "0:00";
+    bool _muted, _active;
+    double _level;
+
+    public string AppName { get => _app; set { if (Set(ref _app, value)) Raise(nameof(Subtitle)); } }
+    /// <summary>Contact or Discord server name, or the app name when unknown.</summary>
+    public string Who { get => _who; set => Set(ref _who, value); }
+    public string Elapsed { get => _elapsed; set { if (Set(ref _elapsed, value)) Raise(nameof(Subtitle)); } }
+    public string Subtitle => $"{_app} · {_elapsed}";
+    public bool Muted { get => _muted; set { if (Set(ref _muted, value)) { Raise(nameof(MuteGlyph)); Raise(nameof(MuteBack)); Raise(nameof(MuteFore)); } } }
+    public string MuteGlyph => _muted ? "\uEC54" : "\uE720";
+    public Brush MuteBack => _muted ? Brushes.White : MakeBrush(0x30);
+    public Brush MuteFore => _muted ? Brushes.Black : Brushes.White;
+    /// <summary>Your voice level, 0..1.</summary>
+    public double Level { get => _level; set => Set(ref _level, value); }
+    public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public System.DateTime Since { get; set; }
+
+    static Brush MakeBrush(byte a) { var b = new SolidColorBrush(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }
 }
 
 /// <summary>Volume or brightness pop-up.</summary>

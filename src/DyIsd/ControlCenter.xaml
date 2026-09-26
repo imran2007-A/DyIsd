@@ -68,7 +68,7 @@
         </Style>
 
         <!-- chip: small toggle, white when selected -->
-        <Style x:Key="Chip" TargetType="ToggleButton">
+        <Style x:Key="ChipToggle" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="#D9FFFFFF"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>

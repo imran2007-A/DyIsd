@@ -11,6 +11,7 @@
         <c:RadiusConverter x:Key="Radius"/>
         <c:NullToCollapsedConverter x:Key="NullToCollapsed"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <c:InverseBoolToVisConverter x:Key="InverseBoolToVis"/>
 
         <!-- Default colors. ThemeService sets the real ones at startup. -->
         <SolidColorBrush x:Key="IslandBg" Color="#F72B2B2D"/>

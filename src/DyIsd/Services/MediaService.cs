@@ -94,6 +94,8 @@ public sealed class MediaService
             State.Artist = string.IsNullOrWhiteSpace(p.Artist) ? p.AlbumArtist ?? "" : p.Artist;
             State.Source = FriendlyName(s.SourceAppUserModelId);
             State.Processes = ProcessNames(s.SourceAppUserModelId);
+            if (State.Processes.Length == 0) State.Processes = new[] { State.Source.ToLowerInvariant() };
+            Log.Write($"playing from: {s.SourceAppUserModelId} (matches: {string.Join(", ", State.Processes)})");
             State.BarBrush = State.Source == "Spotify" ? SpotifyGreen : Brushes.White;
             State.ArtBrush = (p.Thumbnail != null ? await LoadArtAsync(p.Thumbnail) : null) ?? FallbackArt(State.Title);
         }
@@ -110,7 +112,18 @@ public sealed class MediaService
         if (s == null) return;
         try
         {
-            bool playing = s.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            var info = s.GetPlaybackInfo();
+            bool playing = info.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            State.Shuffle = info.IsShuffleActive == true;
+            State.Repeat = info.AutoRepeatMode switch
+            {
+                Windows.Media.MediaPlaybackAutoRepeatMode.Track => 1,
+                Windows.Media.MediaPlaybackAutoRepeatMode.List => 2,
+                _ => 0,
+            };
+            State.CanShuffle = info.Controls.IsShuffleEnabled;
+            State.CanRepeat = info.Controls.IsRepeatEnabled;
+            State.CanSeek = info.Controls.IsPlaybackPositionEnabled;
             if (playing && !State.IsPlaying) State.ActiveSince = DateTime.Now; // resuming counts as new
             State.IsPlaying = playing;
         }
@@ -169,7 +182,8 @@ public sealed class MediaService
     void Recompute()
     {
         // Only while something is actually playing: pause or stop and the island hides right away.
-        bool active = _session != null && State.Title.Length > 0 && State.IsPlaying;
+        State.HasSession = _session != null && State.Title.Length > 0;
+        bool active = State.HasSession && State.IsPlaying;
         if (active == State.IsActive) return;
         State.IsActive = active;
         if (active) State.ActiveSince = DateTime.Now;
@@ -179,6 +193,32 @@ public sealed class MediaService
     public async Task TogglePlayPauseAsync() => await Try(s => s.TryTogglePlayPauseAsync().AsTask());
     public async Task NextAsync() => await Try(s => s.TrySkipNextAsync().AsTask());
     public async Task PreviousAsync() => await Try(s => s.TrySkipPreviousAsync().AsTask());
+
+    public async Task ToggleShuffleAsync() => await Try(s => s.TryChangeShuffleActiveAsync(!State.Shuffle).AsTask());
+
+    /// <summary>Off → repeat all → repeat this song → off, like Spotify.</summary>
+    public async Task CycleRepeatAsync()
+    {
+        var next = State.Repeat switch
+        {
+            0 => Windows.Media.MediaPlaybackAutoRepeatMode.List,
+            2 => Windows.Media.MediaPlaybackAutoRepeatMode.Track,
+            _ => Windows.Media.MediaPlaybackAutoRepeatMode.None,
+        };
+        await Try(s => s.TryChangeAutoRepeatModeAsync(next).AsTask());
+    }
+
+    /// <summary>Jump to a point in the song (0..1).</summary>
+    public async Task SeekAsync(double fraction)
+    {
+        if (_tlLength <= TimeSpan.Zero) return;
+        var target = TimeSpan.FromTicks((long)(_tlLength.Ticks * Math.Clamp(fraction, 0, 1)));
+        await Try(s => s.TryChangePlaybackPositionAsync(target.Ticks).AsTask());
+        // Show the new spot right away instead of waiting for the app to report it.
+        _tlPosition = target;
+        _tlUpdated = DateTimeOffset.Now;
+        UpdateTimeline();
+    }
 
     async Task Try(Func<GSMSession, Task<bool>> action)
     {

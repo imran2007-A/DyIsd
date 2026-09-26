@@ -15,7 +15,9 @@ public sealed class FeatureFlags
     public bool Clipboard { get; set; } = true;
     public bool Deadlines { get; set; } = true;
     public bool Downloads { get; set; } = true;
+    /// <summary>Camera-in-use dot.</summary>
     public bool Privacy { get; set; } = true;
+    public bool Calls { get; set; } = true;
     public bool Earbuds { get; set; } = true;
 }
 
@@ -50,6 +52,10 @@ public sealed class AppSettings
     public bool ClipboardShowText { get; set; } = true;
     public int FocusMinutes { get; set; } = 25;
     public string CalendarUrl { get; set; } = "";
+
+    /// <summary>Your Discord "toggle mute" shortcut (0 = not set). Modifiers use Win32.MOD_KEY_* flags.</summary>
+    public int DiscordMuteKey { get; set; }
+    public int DiscordMuteModifiers { get; set; }
     public List<ManualDeadline> ManualDeadlines { get; set; } = new();
     public bool FirstRunDone { get; set; }
 }

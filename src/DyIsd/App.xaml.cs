@@ -35,6 +35,8 @@ public partial class App : Application
     public ForegroundWatcher Foreground { get; private set; } = null!;
     public PrivacyService Privacy { get; private set; } = null!;
     public EarbudsService Earbuds { get; private set; } = null!;
+    public MicService Mic { get; private set; } = null!;
+    public CallService Calls { get; private set; } = null!;
     public VolumeKeyHook KeyHook { get; private set; } = null!;
 
     const int HotkeyFocus = 1;
@@ -75,19 +77,23 @@ public partial class App : Application
         Foreground = new ForegroundWatcher();
         Privacy = new PrivacyService();
         Earbuds = new EarbudsService();
+        Mic = new MicService();
+        Calls = new CallService(Privacy, Mic);
         KeyHook = new VolumeKeyHook();
         _messages = new MessageWindow();
 
-        Island = new IslandController(_window, Media.State, Timer, Downloads.State, Foreground);
+        Island = new IslandController(_window, Media.State, Timer, Downloads.State, Calls.State, Foreground);
         Wire();
 
         Foreground.Start();
         Volume.Start();
+        Media.State.Volume = Volume.Muted ? 0 : Volume.Level;
         Brightness.Start();
         Battery.Start();
         Clip.Attach(_messages);
         Downloads.Start();
         Fullscreen.Start();
+        Mic.Start();
         Privacy.Start();
         Earbuds.Start();
         _lastCalendarUrl = S.CalendarUrl;
@@ -125,17 +131,28 @@ public partial class App : Application
             c.ShowMessage("", "Good", "Focus done · take 5", 230, 6000, fullscreenOk: true);
         };
 
-        // Mic / camera dot.
+        // Camera dot (green, like iPhone). The mic has no dot; it's used to spot calls.
         Privacy.Changed += () =>
         {
             var before = c.Privacy.App;
-            if (Privacy.CamApp != null) c.Privacy = (ThemeService.Brush("Good"), Privacy.CamApp);
-            else if (Privacy.MicApp != null) c.Privacy = (ThemeService.Brush("Orange"), Privacy.MicApp);
-            else c.Privacy = (null, null);
-
-            if (S.Features.Privacy && c.Privacy.App != null && c.Privacy.App != before)
-                c.ShowPrivacy(Privacy.CamApp != null, c.Privacy.App);
+            c.Privacy = Privacy.CamApp != null ? (ThemeService.Brush("Good"), Privacy.CamApp) : (null, null);
+            if (S.Features.Privacy && c.Privacy.App != null && c.Privacy.App != before) c.ShowPrivacy(true, c.Privacy.App);
             else c.Render();
+        };
+
+        // Calls: green pill with a timer while you're in another window.
+        Calls.ActiveChanged += () =>
+        {
+            c.CallProcesses = Calls.App?.Processes ?? Array.Empty<string>();
+            c.Render();
+        };
+
+        // Your Discord mute shortcut: when you press it, the island shows muted too.
+        KeyHook.KeyDown = vk =>
+        {
+            if (S.DiscordMuteKey == 0 || vk != S.DiscordMuteKey) return;
+            int mods = Win32.CurrentModifiers();
+            if (mods == S.DiscordMuteModifiers) Dispatcher.BeginInvoke(Calls.DiscordShortcutPressed);
         };
 
         Earbuds.Changed += (name, connected, battery) => { if (S.Features.Earbuds) c.ShowEarbuds(name, connected, battery); };
@@ -194,6 +211,15 @@ public partial class App : Application
                     TryStart(new ProcessStartInfo("explorer.exe", $"/select,\"{Island.LastDownloadPath}\""));
                 break;
             case "batt-settings": Open("ms-settings:batterysaver"); break;
+            case "shuffle": _ = Media.ToggleShuffleAsync(); break;
+            case "repeat": _ = Media.CycleRepeatAsync(); break;
+            case "mute": Calls.ToggleMute(S.DiscordMuteKey, S.DiscordMuteModifiers); break;
+            default:
+                if (tag.StartsWith("seek:") && double.TryParse(tag[5..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seek))
+                    _ = Media.SeekAsync(seek);
+                else if (tag.StartsWith("volume:") && double.TryParse(tag[7..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var vol))
+                    Volume.SetLevel(vol);
+                break;
         }
     }
 
@@ -235,7 +261,9 @@ public partial class App : Application
 
     void ApplyKeyHook()
     {
-        if (S.HideWindowsVolumePopup && S.Features.Volume) KeyHook.Install();
+        // Needed for the volume keys and for noticing your Discord mute shortcut.
+        bool needed = (S.HideWindowsVolumePopup && S.Features.Volume) || S.DiscordMuteKey != 0;
+        if (needed) KeyHook.Install();
         else KeyHook.Uninstall();
     }
 
@@ -307,6 +335,7 @@ public partial class App : Application
             Brightness?.Dispose();
             Downloads?.Dispose();
             Foreground?.Dispose();
+            Mic?.Dispose();
             if (_messages != null) Win32.UnregisterHotKey(_messages.Handle, HotkeyFocus);
         }
         catch { }

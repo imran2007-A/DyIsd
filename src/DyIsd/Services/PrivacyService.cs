@@ -1,54 +1,60 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace DyIsd.Services;
 
 /// <summary>
-/// Shows which app is using your microphone or camera, like the iPhone's orange and green dots.
-/// Windows records this in the registry (it's what powers the mic icon in the taskbar).
+/// Which apps are using your microphone or camera right now. Windows records this in the
+/// registry (it's what powers the mic icon in the taskbar). The camera gets a green dot on the
+/// island; the microphone list is how DyIsd knows you're on a call.
 /// </summary>
 public sealed class PrivacyService
 {
-    /// <summary>App using the mic (null when none), app using the camera (null when none).</summary>
     public event Action? Changed;
-    public string? MicApp { get; private set; }
     public string? CamApp { get; private set; }
 
+    /// <summary>Apps holding the mic: lowercase registry key (package name or exe path) and a display name.</summary>
+    public IReadOnlyList<(string Key, string Name)> MicApps { get; private set; } = Array.Empty<(string, string)>();
+
     const string Root = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\";
-    readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+    readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     public void Start()
     {
         _timer.Tick += (_, _) => Poll();
         _timer.Start();
+        Poll();
     }
 
     void Poll()
     {
-        var mic = FindUser("microphone");
-        var cam = FindUser("webcam");
-        if (mic == MicApp && cam == CamApp) return;
-        MicApp = mic;
+        var mic = FindUsers("microphone");
+        var cam = FindUsers("webcam").Select(u => u.Name).FirstOrDefault();
+        if (cam == CamApp && mic.Select(m => m.Key).SequenceEqual(MicApps.Select(m => m.Key))) return;
         CamApp = cam;
+        MicApps = mic;
         Changed?.Invoke();
     }
 
-    static string? FindUser(string capability)
+    static List<(string Key, string Name)> FindUsers(string capability)
     {
+        var list = new List<(string, string)>();
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(Root + capability);
-            if (key == null) return null;
+            if (key == null) return list;
 
-            // Store apps
+            // Store apps (WhatsApp, Teams...)
             foreach (var name in key.GetSubKeyNames())
             {
                 if (name == "NonPackaged") continue;
                 using var app = key.OpenSubKey(name);
-                if (InUse(app)) return PackagedName(name);
+                if (InUse(app)) list.Add((name.ToLowerInvariant(), PackagedName(name)));
             }
             // Regular desktop apps (Chrome, Discord, Zoom...)
             using var np = key.OpenSubKey("NonPackaged");
@@ -57,7 +63,7 @@ public sealed class PrivacyService
                 foreach (var name in np.GetSubKeyNames())
                 {
                     using var app = np.OpenSubKey(name);
-                    if (InUse(app)) return DesktopName(name);
+                    if (InUse(app)) list.Add((name.ToLowerInvariant(), DesktopName(name)));
                 }
             }
         }
@@ -65,7 +71,7 @@ public sealed class PrivacyService
         {
             Log.Error("privacy", ex);
         }
-        return null;
+        return list;
     }
 
     // In use = started at some point and not stopped yet.

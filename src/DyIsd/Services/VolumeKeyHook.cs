@@ -5,13 +5,17 @@ using DyIsd.Native;
 namespace DyIsd.Services;
 
 /// <summary>
-/// Catches the volume keys before Windows sees them. Because Windows never receives the key,
-/// its own volume pop-up never appears, and the island shows instead.
+/// Watches the keyboard for two things:
+///  - Volume keys: swallowed before Windows sees them, so its own volume pop-up never appears.
+///  - Your Discord mute shortcut: noticed (not swallowed) so the island can show you're muted.
 /// </summary>
 public sealed class VolumeKeyHook : IDisposable
 {
-    /// <summary>Gets the virtual key code and whether it's a key press. Return true to swallow the key.</summary>
+    /// <summary>Volume key code and whether it's a press. Return true to swallow the key.</summary>
     public Func<int, bool, bool>? Handler { get; set; }
+
+    /// <summary>Any other key pressed down (virtual key code). Must return fast.</summary>
+    public Action<int>? KeyDown { get; set; }
 
     IntPtr _hook;
     Win32.LowLevelKeyboardProc? _proc; // kept in a field so the garbage collector doesn't free it
@@ -35,14 +39,19 @@ public sealed class VolumeKeyHook : IDisposable
 
     IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && Handler != null)
+        if (nCode >= 0)
         {
             var info = Marshal.PtrToStructure<Win32.KBDLLHOOKSTRUCT>(lParam);
             int vk = (int)info.vkCode;
+            bool down = wParam == (IntPtr)Win32.WM_KEYDOWN || wParam == (IntPtr)Win32.WM_SYSKEYDOWN;
+            bool injected = (info.flags & 0x10) != 0; // pressed by a program (including us), not by you
             if (vk is Win32.VK_VOLUME_MUTE or Win32.VK_VOLUME_DOWN or Win32.VK_VOLUME_UP)
             {
-                bool down = wParam == (IntPtr)Win32.WM_KEYDOWN || wParam == (IntPtr)Win32.WM_SYSKEYDOWN;
-                if (Handler(vk, down)) return (IntPtr)1;
+                if (Handler != null && Handler(vk, down)) return (IntPtr)1;
+            }
+            else if (down && !injected)
+            {
+                KeyDown?.Invoke(vk);
             }
         }
         return Win32.CallNextHookEx(_hook, nCode, wParam, lParam);

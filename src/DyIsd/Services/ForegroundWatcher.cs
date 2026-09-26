@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Windows.Threading;
 using DyIsd.Native;
 
 namespace DyIsd.Services;
@@ -16,6 +17,7 @@ public sealed class ForegroundWatcher : IDisposable
 
     IntPtr _hook;
     Win32.WinEventProc? _proc; // kept alive so the garbage collector doesn't free it
+    readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromSeconds(1) };
 
     public void Start()
     {
@@ -23,6 +25,9 @@ public sealed class ForegroundWatcher : IDisposable
         _hook = Win32.SetWinEventHook(Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND,
             IntPtr.Zero, _proc, 0, 0, Win32.WINEVENT_OUTOFCONTEXT);
         Update(Win32.GetForegroundWindow());
+        // Backup in case Windows skips a "you switched apps" message.
+        _poll.Tick += (_, _) => Update(Win32.GetForegroundWindow());
+        _poll.Start();
     }
 
     void Update(IntPtr hwnd)
@@ -30,6 +35,7 @@ public sealed class ForegroundWatcher : IDisposable
         string name = NameOf(hwnd);
         if (name.Length == 0 || name == "dyisd" || name == Current) return; // ignore our own windows
         Current = name;
+        Log.Write("in front: " + name);
         Changed?.Invoke();
     }
 

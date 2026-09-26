@@ -9,8 +9,7 @@ at the file where it happens.
       → `src/DyIsd/Island/IslandWindow.xaml` + `IslandWindow.xaml.cs`
 - [ ] How the island stays on top, is see-through, and never steals focus
       → `IslandWindow.xaml` (AllowsTransparency, Topmost) and `SetExStyle()`
-- [ ] How clicks pass through the island until you hold Alt (WS_EX_TRANSPARENT + cursor polling)
-      → `IslandWindow.xaml.cs` → `Track()`
+- [ ] Routed events: how the seek bar tells the window you let go → `Controls/ProgressLine.cs`
 - [ ] The spring animation: an easing function is just math → `Controls/SpringEase.cs`
 - [ ] How the app decides what the island shows (newest activity, hidden if you're in its app)
       → `src/DyIsd/Island/IslandController.cs` → `PickActivity()`
@@ -32,6 +31,9 @@ at the file where it happens.
 - [ ] Which app you're in: `SetWinEventHook` → `Services/ForegroundWatcher.cs`
 - [ ] Drawing an animation in code → `Controls/Equalizer.cs` (the music bars)
 - [ ] Mic/camera in use: the registry Windows keeps for privacy → `Services/PrivacyService.cs`
+- [ ] Calls: "a call app holds the mic" + reading window titles → `Services/CallService.cs`
+- [ ] Muting the mic and reading its level (Core Audio) → `Services/MicService.cs`
+- [ ] Pressing a keyboard shortcut from code (Discord mute) → `Native/Win32.cs` → `PressShortcut()`
 - [ ] Bluetooth earbuds: `DeviceWatcher` → `Services/EarbudsService.cs`
 - [ ] Building UI in code instead of XAML → `ControlCenter.xaml.cs` (tiles, deadline rows)
 - [ ] Clipboard: `AddClipboardFormatListener` + a message-only window → `Services/ClipboardService.cs`, `MessageWindow.cs`

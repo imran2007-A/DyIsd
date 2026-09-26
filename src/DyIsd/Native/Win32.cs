@@ -75,14 +75,43 @@ internal static class Win32
     [DllImport("user32.dll")]
     static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
 
-    /// <summary>
-    /// Presses an unused key. Stops "Alt + click" from opening the menu bar of the app you're in
-    /// when you let go of Alt.
-    /// </summary>
-    public static void CancelAltMenu()
+    public const int VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_LWIN = 0x5B;
+    public const int MOD_KEY_ALT = 1, MOD_KEY_CTRL = 2, MOD_KEY_SHIFT = 4, MOD_KEY_WIN = 8;
+
+    /// <summary>Which of Ctrl / Alt / Shift / Win are held right now (MOD_KEY_* flags).</summary>
+    public static int CurrentModifiers() =>
+        ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0 ? MOD_KEY_ALT : 0) |
+        ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 ? MOD_KEY_CTRL : 0) |
+        ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 ? MOD_KEY_SHIFT : 0) |
+        ((GetAsyncKeyState(VK_LWIN) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0 ? MOD_KEY_WIN : 0);
+
+    /// <summary>Presses a keyboard shortcut, like you typed it (used for the Discord mute key).</summary>
+    public static void PressShortcut(int modifiers, int vk)
     {
-        keybd_event(0xE8, 0, 0, UIntPtr.Zero);
-        keybd_event(0xE8, 0, 2, UIntPtr.Zero);
+        var mods = new (int Flag, byte Key)[] { (MOD_KEY_CTRL, (byte)VK_CONTROL), (MOD_KEY_ALT, (byte)VK_MENU), (MOD_KEY_SHIFT, (byte)VK_SHIFT), (MOD_KEY_WIN, (byte)VK_LWIN) };
+        foreach (var (flag, key) in mods) if ((modifiers & flag) != 0) keybd_event(key, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)vk, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)vk, 0, 2, UIntPtr.Zero);
+        for (int i = mods.Length - 1; i >= 0; i--) if ((modifiers & mods[i].Flag) != 0) keybd_event(mods[i].Key, 0, 2, UIntPtr.Zero);
+    }
+
+    // ---- window titles (to find who you're calling) ----
+    public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+
+    public static string WindowTitle(IntPtr hwnd)
+    {
+        var sb = new StringBuilder(256);
+        GetWindowText(hwnd, sb, sb.Capacity);
+        return sb.ToString();
     }
 
     [DllImport("user32.dll", SetLastError = true)]
