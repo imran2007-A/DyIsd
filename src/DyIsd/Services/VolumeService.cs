@@ -12,8 +12,13 @@ namespace DyIsd.Services;
 /// </summary>
 public sealed class VolumeService : IMMNotificationClient, IDisposable
 {
-    /// <summary>Level 0..1 and muted flag. Raised on the UI thread.</summary>
-    public event Action<float, bool>? Changed;
+    /// <summary>Level 0..1, muted flag, and whether DyIsd made the change (keys it caught,
+    /// scrolling on the island, the player's slider). Raised on the UI thread.</summary>
+    public event Action<float, bool, bool>? Changed;
+
+    // Changes Windows reports within this window after DyIsd changed the volume are ours.
+    DateTime _ourChangeUntil;
+    void MarkOurs() => _ourChangeUntil = DateTime.Now.AddMilliseconds(700);
 
     public bool IsReady => _device != null;
     public float Level { get; private set; }
@@ -56,7 +61,7 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
     {
         Level = d.MasterVolume;
         Muted = d.Muted;
-        Changed?.Invoke(Level, Muted);
+        Changed?.Invoke(Level, Muted, DateTime.Now < _ourChangeUntil);
     });
 
     /// <summary>Changes volume by a number of percent (Windows uses 2 per key press).</summary>
@@ -65,6 +70,7 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
         try
         {
             if (_device == null) return;
+            MarkOurs();
             var v = _device.AudioEndpointVolume;
             float next = Math.Clamp((float)Math.Round(v.MasterVolumeLevelScalar * 100 + percent) / 100f, 0f, 1f);
             if (v.Mute && percent > 0) v.Mute = false;
@@ -81,6 +87,7 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
         try
         {
             if (_device == null) return;
+            MarkOurs();
             var v = _device.AudioEndpointVolume;
             if (v.Mute && level > 0) v.Mute = false;
             v.MasterVolumeLevelScalar = (float)Math.Clamp(level, 0, 1);
@@ -95,7 +102,9 @@ public sealed class VolumeService : IMMNotificationClient, IDisposable
     {
         try
         {
-            if (_device != null) _device.AudioEndpointVolume.Mute = !_device.AudioEndpointVolume.Mute;
+            if (_device == null) return;
+            MarkOurs();
+            _device.AudioEndpointVolume.Mute = !_device.AudioEndpointVolume.Mute;
         }
         catch (Exception ex)
         {

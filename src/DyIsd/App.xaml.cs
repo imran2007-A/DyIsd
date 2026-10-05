@@ -156,7 +156,15 @@ public partial class App : Application
         };
 
         Earbuds.Changed += (name, connected, battery) => { if (S.Features.Earbuds) c.ShowEarbuds(name, connected, battery); };
-        Volume.Changed += (level, muted) => { if (S.Features.Volume) c.ShowVolume(level, muted); };
+        // Headphone buttons and other apps change the volume through Windows, which shows its
+        // own pop-up that can't be turned off. Only show the island for changes DyIsd made,
+        // so there's never a double pop-up. (When DyIsd isn't replacing Windows' pop-up, show all.)
+        Volume.Changed += (level, muted, byUs) =>
+        {
+            Media.State.Volume = muted ? 0 : level;
+            if (!S.Features.Volume) return;
+            if (byUs || !S.HideWindowsVolumePopup) c.ShowVolume(level, muted);
+        };
         Brightness.Changed += level => { if (S.Features.Brightness) c.ShowBrightness(level); };
         Battery.Event += (ev, pct, left) => { if (S.Features.Battery) c.ShowBattery(ev, pct, left); };
         Clip.Copied += info => { if (S.Features.Clipboard) c.ShowClipboard(info); };

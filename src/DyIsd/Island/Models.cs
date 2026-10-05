@@ -79,6 +79,54 @@ public sealed class DownloadState : Observable
     public System.DateTime ActiveSince { get; set; }
 }
 
+/// <summary>The Windows Clock app's running timer or stopwatch.</summary>
+public sealed class ClockState : Observable
+{
+    string _mode = "timer", _label = "Timer", _text = "0:00";
+    bool _active;
+
+    public string Mode { get => _mode; set { if (Set(ref _mode, value)) Raise(nameof(Glyph)); } }
+    public string Label { get => _label; set => Set(ref _label, value); }
+    public string Text { get => _text; set => Set(ref _text, value); }
+    public string Glyph => _mode == "timer" ? "\uE916" : "\uE916";
+    public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public System.DateTime Since { get; set; }
+}
+
+/// <summary>An incoming WhatsApp / Discord call that hasn't been answered yet.</summary>
+public sealed class RingState : Observable
+{
+    string _app = "", _who = "";
+    bool _active;
+    Brush _color = Brushes.Gray;
+
+    public string AppName { get => _app; set { if (Set(ref _app, value)) Raise(nameof(Subtitle)); } }
+    public string Who { get => _who; set { if (Set(ref _who, value)) Raise(nameof(Initial)); } }
+    public string Initial => _who.Length > 0 ? _who[..1].ToUpperInvariant() : "?";
+    public string Subtitle => $"{_app} · incoming call";
+    public Brush AppColor { get => _color; set => Set(ref _color, value); }
+    public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public System.DateTime Since { get; set; }
+}
+
+/// <summary>A Nearby Share or Bluetooth file transfer.</summary>
+public sealed class TransferState : Observable
+{
+    string _title = "", _detail = "", _percent = "";
+    double _progress;
+    bool _active, _known;
+
+    public string Title { get => _title; set => Set(ref _title, value); }
+    public string Detail { get => _detail; set => Set(ref _detail, value); }
+    public string PercentText { get => _percent; set => Set(ref _percent, value); }
+    public double Progress { get => _progress; set => Set(ref _progress, value); }
+    /// <summary>False when only "it's happening" is known, not how far along.</summary>
+    public bool KnowsProgress { get => _known; set { if (Set(ref _known, value)) Raise(nameof(Unknown)); } }
+    public bool Unknown => !_known;
+    public bool IsActive { get => _active; set => Set(ref _active, value); }
+    public System.DateTime Since { get; set; }
+}
+
 /// <summary>A WhatsApp / Discord / Teams call in progress.</summary>
 public sealed class CallState : Observable
 {
