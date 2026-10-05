@@ -73,7 +73,7 @@ Discord deafen/join, and typing prompts into Claude.
 - **Ringing calls, Windows Clock and file transfers** are read off those apps' windows with
   UI Automation (what screen readers use), because Windows has no API for them. They depend on
   how each app labels its buttons and may need tuning on your PC: `log.txt` records what DyIsd
-  saw (lines starting `ring sees`, `clock sees`, `transfer sees`). Send those if one doesn't show.
+  saw (lines starting `ring sees`, `clock sees`, `transfer sees`; see "Where things are" for the folder). Send those if one doesn't show.
 - **Listen for "Jarvis"** keeps the microphone open, so Windows shows its mic icon. Every phrase
   it hears is turned into text on your laptop to check for the name; nothing is sent anywhere.
   It pauses during calls. Turn it off and Ctrl + Space still works.
@@ -94,8 +94,14 @@ To update, do the same with a newer build. Your settings are kept.
 
 | | |
 |---|---|
-| Settings file | `%LOCALAPPDATA%\DyIsd\settings.json` |
-| Log (send this if something breaks) | `%LOCALAPPDATA%\DyIsd\log.txt` |
+| Settings file | `settings.json` in DyIsd's data folder (below) |
+| Log (send this if something breaks) | `log.txt` in DyIsd's data folder |
+
+DyIsd's data folder:
+- **Installed with Install.bat:** Windows keeps installed apps' files private, so it's at
+  `%LOCALAPPDATA%\Packages\DyIsd_<letters>\LocalCache\Local\DyIsd`
+  (press Win + R, type `%LOCALAPPDATA%\Packages`, open the folder starting with `DyIsd_`).
+- **Portable version:** `%LOCALAPPDATA%\DyIsd`
 
 ## Project layout
 
