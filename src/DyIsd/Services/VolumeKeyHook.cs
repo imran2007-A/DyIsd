@@ -8,6 +8,7 @@ namespace DyIsd.Services;
 /// Watches the keyboard for two things:
 ///  - Volume keys: swallowed before Windows sees them, so its own volume pop-up never appears.
 ///  - Your Discord mute shortcut: noticed (not swallowed) so the island can show you're muted.
+///  - Ctrl + Space: held down, Jarvis listens (the Space is swallowed so it doesn't type).
 /// </summary>
 public sealed class VolumeKeyHook : IDisposable
 {
@@ -16,6 +17,9 @@ public sealed class VolumeKeyHook : IDisposable
 
     /// <summary>Any other key pressed down (virtual key code). Must return fast.</summary>
     public Action<int>? KeyDown { get; set; }
+
+    /// <summary>Every key you press or release (not ones apps send). Return true to swallow it. Must return fast.</summary>
+    public Func<int, bool, bool>? Intercept { get; set; }
 
     IntPtr _hook;
     Win32.LowLevelKeyboardProc? _proc; // kept in a field so the garbage collector doesn't free it
@@ -44,14 +48,16 @@ public sealed class VolumeKeyHook : IDisposable
             var info = Marshal.PtrToStructure<Win32.KBDLLHOOKSTRUCT>(lParam);
             int vk = (int)info.vkCode;
             bool down = wParam == (IntPtr)Win32.WM_KEYDOWN || wParam == (IntPtr)Win32.WM_SYSKEYDOWN;
+            // Releases arrive as WM_KEYUP / WM_SYSKEYUP; everything else here is a press.
             bool injected = (info.flags & 0x10) != 0; // pressed by a program (including us), not by you
             if (vk is Win32.VK_VOLUME_MUTE or Win32.VK_VOLUME_DOWN or Win32.VK_VOLUME_UP)
             {
                 if (Handler != null && Handler(vk, down)) return (IntPtr)1;
             }
-            else if (down && !injected)
+            else if (!injected)
             {
-                KeyDown?.Invoke(vk);
+                if (Intercept != null && Intercept(vk, down)) return (IntPtr)1;
+                if (down) KeyDown?.Invoke(vk);
             }
         }
         return Win32.CallNextHookEx(_hook, nCode, wParam, lParam);

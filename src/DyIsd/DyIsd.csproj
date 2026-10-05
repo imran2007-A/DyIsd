@@ -21,13 +21,25 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Jarvis: records the microphone at 16 kHz -->
+    <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="System.Management" Version="10.0.0" />
     <PackageReference Include="Ical.Net" Version="4.3.1" />
+    <!-- Jarvis: local speech recognition (whisper.cpp). Vulkan runs it on the graphics card,
+         the CPU runtime is the fallback when there's no usable GPU. -->
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\DyIsd.ico" LogicalName="DyIsd.ico" />
     <Resource Include="Assets\icon.png" />
   </ItemGroup>
+
+  <!-- Whisper ships speech engines for every platform; a 64-bit Windows build only needs its own (saves ~60 MB). -->
+  <Target Name="TrimWhisperRuntimes" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <RemoveDir Directories="$(PublishDir)runtimes/vulkan/linux-x64;$(PublishDir)runtimes/win-arm64;$(PublishDir)runtimes/win-x86" />
+  </Target>
 
 </Project>

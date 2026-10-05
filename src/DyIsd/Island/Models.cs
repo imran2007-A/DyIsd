@@ -85,10 +85,14 @@ public sealed class ClockState : Observable
     string _mode = "timer", _label = "Timer", _text = "0:00";
     bool _active;
 
-    public string Mode { get => _mode; set { if (Set(ref _mode, value)) Raise(nameof(Glyph)); } }
+    public string Mode { get => _mode; set { if (Set(ref _mode, value)) { Raise(nameof(Glyph)); Raise(nameof(Accent)); } } }
+    /// <summary>Orange for a timer (like iPhone), white for the stopwatch.</summary>
+    public Brush Accent => _mode == "timer" ? TimerOrange : Brushes.White;
+    static readonly Brush TimerOrange = MakeOrange();
+    static Brush MakeOrange() { var b = new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A)); b.Freeze(); return b; }
     public string Label { get => _label; set => Set(ref _label, value); }
     public string Text { get => _text; set => Set(ref _text, value); }
-    public string Glyph => _mode == "timer" ? "\uE916" : "\uE916";
+    public string Glyph => _mode == "timer" ? "\uE916" : "\uE823";
     public bool IsActive { get => _active; set => Set(ref _active, value); }
     public System.DateTime Since { get; set; }
 }
@@ -180,4 +184,18 @@ public sealed class InfoCard
     public string? Initial { get; init; }
     public Brush? AvatarBrush { get; init; }
     public string? AppName { get; init; }
+}
+
+/// <summary>Jarvis listening / working on what you said.</summary>
+public sealed class JarvisState : Observable
+{
+    string _text = "Listening…";
+    double _level;
+    bool _listening = true;
+
+    public string Text { get => _text; set => Set(ref _text, value); }
+    /// <summary>How loud you are, 0..1 (the wave).</summary>
+    public double Level { get => _level; set => Set(ref _level, value); }
+    public bool IsListening { get => _listening; set { if (Set(ref _listening, value)) Raise(nameof(IsThinking)); } }
+    public bool IsThinking => !_listening;
 }

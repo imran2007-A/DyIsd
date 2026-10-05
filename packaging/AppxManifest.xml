@@ -43,5 +43,8 @@
   <Capabilities>
     <Capability Name="internetClient" />
     <rescap:Capability Name="runFullTrust" />
+    <!-- Jarvis listens on the microphone; voice commands turn Wi-Fi / Bluetooth on and off -->
+    <DeviceCapability Name="microphone" />
+    <DeviceCapability Name="radios" />
   </Capabilities>
 </Package>

@@ -11,10 +11,12 @@ namespace DyIsd.Island;
 
 /// <summary>
 /// Decides what the island shows. Two kinds of things:
-///  - Activities that last: a call, music while it plays, focus timer, a download.
-///    A call always wins; otherwise the newest one shows. Never while you're already in the
-///    app it belongs to.
-///  - Pop-ups that come and go: volume, clipboard, battery, earbuds, deadlines...
+///  - Activities that last: a call, a ringing call, music, timers, downloads, file transfers.
+///    The most important one fills the island (call → ringing / Clock timer → music →
+///    stopwatch / focus → downloads / transfers); the next one sits in a small circle beside it,
+///    like iPhone. Click the circle to swap them. Never shown while you're in the app it belongs
+///    to. Flick the island up to hide an activity until it changes (next song, new call...).
+///  - Pop-ups that come and go: volume, silent switch, clipboard, battery, Jarvis...
 ///    They take over for a few seconds, then the island goes back to the activity or hides.
 /// </summary>
 public sealed class IslandController
@@ -30,6 +32,9 @@ public sealed class IslandController
     readonly FocusTimer _timer;
     readonly DownloadState _download;
     readonly CallState _call;
+    readonly ClockState _clock;
+    readonly RingState _ring;
+    readonly TransferState _xfer;
     readonly ForegroundWatcher _fg;
 
     readonly DispatcherTimer _popupTimer = new();
@@ -43,20 +48,40 @@ public sealed class IslandController
     /// <summary>You paused from the island's player: keep a tiny dot so you can resume.</summary>
     bool _pausedHere;
     public string[] CallProcesses { get; set; } = Array.Empty<string>();
+    public string[] RingProcesses { get; set; } = Array.Empty<string>();
+
+    /// <summary>Flicked away: activity kind → what it was showing when you flicked it.</summary>
+    readonly Dictionary<string, string> _dismissed = new();
+    /// <summary>You clicked the circle: show this one big while these two are the top two.</summary>
+    string? _preferred;
+    (string, string)? _preferredPair;
+    string? _bubbleKind;
+
+    public static readonly string[] ClockProcesses = { "time" };
+    public static readonly string[] TransferProcesses = { "fsquirt" };
 
     public string? LastDownloadPath { get; private set; }
     public (Brush? Brush, string? App) Privacy { get; set; }
 
     static AppSettings S => SettingsStore.Current;
 
-    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, CallState call, ForegroundWatcher fg)
+    public IslandController(IslandWindow win, MediaState media, FocusTimer timer, DownloadState download, CallState call,
+        ClockState clock, RingState ring, TransferState xfer, ForegroundWatcher fg)
     {
         _win = win;
         _media = media;
         _timer = timer;
         _download = download;
         _call = call;
+        _clock = clock;
+        _ring = ring;
+        _xfer = xfer;
         _fg = fg;
+        // A flicked-away song comes back when the next one starts.
+        _media.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MediaState.Title) && _dismissed.ContainsKey("media")) Render();
+        };
         // Playing again (from anywhere) or the player closing clears the paused dot.
         _media.PropertyChanged += (_, e) =>
         {
@@ -97,6 +122,8 @@ public sealed class IslandController
         _win.Seek += v => ActionRequested?.Invoke("seek:" + v.ToString(System.Globalization.CultureInfo.InvariantCulture));
         _win.VolumeSet += v => ActionRequested?.Invoke("volume:" + v.ToString(System.Globalization.CultureInfo.InvariantCulture));
         _win.Dropped += zone => PositionDropped?.Invoke(zone);
+        _win.FlickedUp += OnFlick;
+        _win.BubbleClicked += OnBubbleClick;
     }
 
     public bool Paused
@@ -121,36 +148,75 @@ public sealed class IslandController
 
     // ---------------- which activity to show ----------------
 
-    /// <summary>The newest running activity whose app you're not currently using.</summary>
-    string? PickActivity()
+    /// <summary>
+    /// Running activities whose app you're not using, most important first.
+    /// Same importance: the newest first.
+    /// </summary>
+    List<string> PickActivities()
     {
-        if (Quiet) return null;
-        // A call beats everything, like on iPhone.
-        if (S.Features.Calls && _call.IsActive && !_fg.IsAny(CallProcesses)) return "call";
-
-        var list = new List<(string Kind, DateTime Since)>();
+        var list = new List<(string Kind, int Rank, DateTime Since)>();
+        if (Quiet) return new List<string>();
+        var f = S.Features;
+        if (f.Calls && _call.IsActive && !_fg.IsAny(CallProcesses)) list.Add(("call", 0, _call.Since));
+        if (f.Calls && _ring.IsActive && !_fg.IsAny(RingProcesses)) list.Add(("ring", 1, _ring.Since));
+        if (f.Clock && _clock.IsActive && !_fg.IsAny(ClockProcesses)) list.Add(("clock", _clock.Mode == "timer" ? 1 : 3, _clock.Since));
         bool mediaOn = _media.IsActive || (_pausedHere && _media.HasSession);
-        if (S.Features.Media && mediaOn && !_fg.IsAny(_media.Processes)) list.Add(("media", _media.ActiveSince));
-        if (S.Features.FocusTimer && _timer.IsActive) list.Add(("timer", _timer.StartedAt));
-        if (S.Features.Downloads && _download.IsActive && !_fg.IsAny(AppJumper.Browsers)) list.Add(("download", _download.ActiveSince));
-        return list.OrderByDescending(a => a.Since).Select(a => a.Kind).FirstOrDefault();
+        if (f.Media && mediaOn && !_fg.IsAny(_media.Processes)) list.Add(("media", 2, _media.ActiveSince));
+        if (f.FocusTimer && _timer.IsActive) list.Add(("timer", 3, _timer.StartedAt));
+        if (f.Downloads && _download.IsActive && !_fg.IsAny(AppJumper.Browsers)) list.Add(("download", 4, _download.ActiveSince));
+        if (f.Transfers && _xfer.IsActive && !_fg.IsAny(TransferProcesses)) list.Add(("xfer", 4, _xfer.Since));
+
+        // Flicked away and still the same thing: keep it hidden. Changed: forget the flick.
+        foreach (var kind in _dismissed.Keys.ToList())
+            if (_dismissed[kind] != Signature(kind)) _dismissed.Remove(kind);
+        list.RemoveAll(a => _dismissed.ContainsKey(a.Kind));
+
+        var ordered = list.OrderBy(a => a.Rank).ThenByDescending(a => a.Since).Select(a => a.Kind).ToList();
+        if (ordered.Count >= 2 && _preferred != null && _preferredPair is var (a, b) &&
+            ((ordered[0] == a && ordered[1] == b) || (ordered[0] == b && ordered[1] == a)))
+        {
+            if (ordered[1] == _preferred) (ordered[0], ordered[1]) = (ordered[1], ordered[0]);
+        }
+        else
+        {
+            _preferred = null;
+            _preferredPair = null;
+        }
+        return ordered;
     }
+
+    /// <summary>What an activity is showing right now; a flick hides it until this changes.</summary>
+    string Signature(string kind) => kind switch
+    {
+        "media" => _media.Title + "|" + _media.Artist,
+        "call" => _call.Since.Ticks.ToString(),
+        "ring" => _ring.Since.Ticks.ToString(),
+        "clock" => _clock.Mode + _clock.Since.Ticks,
+        "timer" => _timer.StartedAt.Ticks.ToString(),
+        "download" => _download.FileName,
+        "xfer" => _xfer.Since.Ticks.ToString(),
+        _ => "",
+    };
 
     public void Render()
     {
         if (_paused)
         {
             _win.HideIsland();
+            _win.SetBubble(null, null, 0);
             _win.SetPrivacyDot(null, null);
             _shownKind = null;
             return;
         }
 
-        var kind = PickActivity();
+        var activities = PickActivities();
+        var kind = activities.FirstOrDefault();
+        var second = activities.Skip(1).FirstOrDefault();
         if (kind != _shownKind) _expanded = false;
         _shownKind = kind;
 
         double? width = null;
+        string? bubble = null;
         if (_popup != null)
         {
             _win.ShowView(_popup.Template, _popup.Kind, _popup.Data, _popup.W, _popup.H);
@@ -161,14 +227,24 @@ public sealed class IslandController
             var (template, data, w, h) = Spec(kind, _expanded);
             _win.ShowView(template, template, data, w, h);
             width = w;
+            // The second activity in a small circle beside a compact island.
+            if (second != null && !_expanded && kind != "ring") bubble = second;
         }
         else
         {
             _win.HideIsland();
         }
 
+        _bubbleKind = bubble;
+        if (bubble != null)
+        {
+            var (bt, bd) = BubbleSpec(bubble);
+            _win.SetBubble(bt, bd, width ?? 0);
+        }
+        else _win.SetBubble(null, null, width ?? 0);
+
         bool dot = S.Features.Privacy && Privacy.Brush != null && !Quiet;
-        _win.SetPrivacyDot(dot ? Privacy.Brush : null, width);
+        _win.SetPrivacyDot(dot ? Privacy.Brush : null, width == null ? null : width + (bubble != null ? IslandWindow.BubbleSize + IslandWindow.BubbleGap : 0));
     }
 
     (string, object, double, double) Spec(string kind, bool expanded) => kind switch
@@ -177,9 +253,42 @@ public sealed class IslandController
                  : _pausedHere && !_media.IsPlaying ? ("media-dot", _media, 14, 14)
                  : ("media-c", _media, 190, 34),
         "call" => expanded ? ("call-e", _call, 360, 84) : ("call-c", _call, 190, 34),
+        "ring" => ("ring-e", _ring, 370, 76), // a ringing call always shows big, like iPhone
         "timer" => expanded ? ("timer-e", _timer, 330, 128) : ("timer-c", _timer, 150, 34),
+        "clock" => expanded ? ("clock-e", _clock, 300, 96) : ("clock-c", _clock, 150, 34),
+        "xfer" => expanded ? ("xfer-e", _xfer, 346, 94) : ("xfer-c", _xfer, 150, 34),
         _ => expanded ? ("dl-e", _download, 346, 94) : ("dl-c", _download, 150, 34),
     };
+
+    (string, object) BubbleSpec(string kind) => kind switch
+    {
+        "media" => ("b-media", _media),
+        "call" => ("b-call", _call),
+        "ring" => ("b-ring", _ring),
+        "timer" => ("b-timer", _timer),
+        "clock" => ("b-clock", _clock),
+        "xfer" => ("b-xfer", _xfer),
+        _ => ("b-dl", _download),
+    };
+
+    void OnBubbleClick()
+    {
+        if (_bubbleKind == null || _shownKind == null) return;
+        _preferred = _bubbleKind;
+        _preferredPair = (_shownKind, _bubbleKind);
+        _expanded = false;
+        Render();
+    }
+
+    /// <summary>Flicked up: a pop-up closes; an activity hides until it changes.</summary>
+    void OnFlick()
+    {
+        if (_popup != null) { EndPopup(); return; }
+        if (_shownKind == null) return;
+        _dismissed[_shownKind] = Signature(_shownKind);
+        _expanded = false;
+        Render();
+    }
 
     // ---------------- mouse ----------------
 
@@ -211,6 +320,7 @@ public sealed class IslandController
             return;
         }
         if (_shownKind == null) return;
+        if (_shownKind == "ring") { Jump(); return; }
         _expanded = !_expanded;
         Render();
     }
@@ -222,6 +332,9 @@ public sealed class IslandController
         {
             "media" => _media.Processes,
             "call" => CallProcesses,
+            "ring" => RingProcesses,
+            "clock" => ClockProcesses,
+            "xfer" => TransferProcesses,
             "download" => AppJumper.Browsers,
             _ => null,
         };
@@ -360,4 +473,50 @@ public sealed class IslandController
 
     public void ShowMessage(string glyph, string brushKey, string text, double width, int ms = 3200, bool fullscreenOk = false) =>
         ShowPopup("pill", "msg:" + text, new InfoCard { Glyph = glyph, GlyphBrush = B(brushKey), Title = text }, width, 40, ms, fullscreenOk);
+
+    /// <summary>The iPhone silent switch: a red bell that wiggles when sound goes off.</summary>
+    public void ShowSilent(bool silent) =>
+        ShowPopup("silent", "silent:" + silent, new InfoCard
+        {
+            Glyph = silent ? "\uE7ED" : "\uEA8F",
+            AvatarBrush = silent ? B("Bad") : B("Chip"),
+            Title = silent ? "Silent" : "Ring",
+            RightBrush = silent ? B("Bad") : B("IslandFg"),
+        }, 196, 36, 1800, fullscreenOk: true);
+
+    public void ShowTransferDone(string title, string file) =>
+        ShowPopup("card", "xferdone", new InfoCard
+        {
+            Glyph = "\uE73E", GlyphBrush = B("Good"), Title = title, Subtitle = file.Length > 0 ? file : null,
+            Button1 = title.StartsWith("Received") ? "Folder" : null, Tag1 = "xfer-folder",
+        }, 360, file.Length > 0 ? 58 : 44, 4500);
+
+    // ---------------- Jarvis ----------------
+
+    public void ShowJarvis(JarvisState state) => ShowPopup("jarvis", "jarvis", state, 270, 40, 60000, fullscreenOk: true);
+
+    public void EndJarvis()
+    {
+        if (_popup != null && (_popup.Kind == "jarvis" || _popup.Kind.StartsWith("jv:"))) EndPopup();
+    }
+
+    /// <summary>A Jarvis answer, question or download card. width 0 = fit the text.</summary>
+    public void ShowJarvisCard(string glyph, string brushKey, string title, string? sub, string? right, string? button1, string? button2, double width, int ms)
+    {
+        static string? TagFor(string? label) => label switch
+        {
+            "Download" => "jv-download", "Yes" => "jv-yes", "No" => "jv-no", null => null, _ => "dismiss",
+        };
+        if (width <= 0)
+        {
+            double text = Math.Max(title.Length * 7.3, (sub?.Length ?? 0) * 6.3);
+            double buttons = (button1 != null ? 74 : 0) + (button2 != null ? 64 : 0) + (right != null ? 44 : 0);
+            width = Math.Clamp(16 + 19 + 12 + text + 10 + buttons + 16, 220, 392);
+        }
+        ShowPopup("card", "jv:" + title.GetHashCode(), new InfoCard
+        {
+            Glyph = glyph, GlyphBrush = B(brushKey), Title = title, Subtitle = sub, Right = right, RightBrush = B("IslandMute"),
+            Button1 = button1, Tag1 = TagFor(button1), Button2 = button2, Tag2 = TagFor(button2),
+        }, width, sub == null ? 44 : 58, ms, fullscreenOk: true);
+    }
 }

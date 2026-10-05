@@ -73,12 +73,14 @@ public partial class ControlCenter : Window
 
         _refresh.Tick += (_, _) => { RefreshDeadlines(); RefreshFocus(); };
         _app.Timer.PropertyChanged += OnTimerChanged;
+        _app.Jarvis.StatusChanged += RefreshJarvis;
         Deactivated += (_, _) => Close();
         Closed += (_, _) =>
         {
             ClosedAt = DateTime.Now;
             _refresh.Stop();
             _app.Timer.PropertyChanged -= OnTimerChanged;
+            _app.Jarvis.StatusChanged -= RefreshJarvis;
         };
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
 
@@ -114,6 +116,7 @@ public partial class ControlCenter : Window
 
     void RefreshAll()
     {
+        RefreshJarvis();
         RefreshFocus();
         RefreshDeadlines();
         RefreshCalendar();
@@ -121,6 +124,54 @@ public partial class ControlCenter : Window
         RefreshPositions();
         PauseBtn.Content = _app.IslandPaused ? "Resume island" : "Pause island";
         UpdatePreview();
+    }
+
+    // ================= jarvis =================
+
+    void RefreshJarvis()
+    {
+        var j = _app.Jarvis;
+        if (j.Downloading)
+        {
+            JarvisBtn.Content = $"{(int)(j.DownloadProgress * 100)}%";
+            JarvisBtn.IsEnabled = false;
+            JarvisSub.Text = "Downloading its ears (470 MB, one time). Keep DyIsd running.";
+        }
+        else if (!j.ModelReady)
+        {
+            JarvisBtn.Content = "Get it";
+            JarvisBtn.IsEnabled = true;
+            JarvisSub.Text = "Voice control, no AI, nothing leaves this laptop. Needs a one-time 470 MB download.";
+        }
+        else if (S.JarvisEnabled)
+        {
+            JarvisBtn.Content = "Turn off";
+            JarvisBtn.IsEnabled = true;
+            string where = j.Runtime.Length == 0 ? "" : j.Runtime.Contains("Vulkan", StringComparison.OrdinalIgnoreCase) ? " · on your graphics card" : " · on the processor";
+            JarvisSub.Text = (S.JarvisWakeWord ? "Hold Ctrl + Space and talk, or say \u201CJarvis\u2026\u201D" : "Hold Ctrl + Space and talk") +
+                             ". Try \u201Copen chrome\u201D, \u201Cvolume 40\u201D, \u201Cremind me to study at 7\u201D." + where;
+        }
+        else
+        {
+            JarvisBtn.Content = "Turn on";
+            JarvisBtn.IsEnabled = true;
+            JarvisSub.Text = "Off. Ctrl + Space types a space like normal.";
+        }
+    }
+
+    void Jarvis_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_app.Jarvis.ModelReady)
+        {
+            if (!S.JarvisEnabled) { S.JarvisEnabled = true; SettingsStore.Save(); }
+            _app.Jarvis.StartDownload();
+        }
+        else
+        {
+            S.JarvisEnabled = !S.JarvisEnabled;
+            SettingsStore.Save();
+        }
+        RefreshJarvis();
     }
 
     // ================= focus =================
@@ -212,7 +263,7 @@ public partial class ControlCenter : Window
 
             if (item.IsDeadline)
             {
-                var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "", ToolTip = "Remove", VerticalAlignment = VerticalAlignment.Center };
+                var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE711", ToolTip = "Remove", VerticalAlignment = VerticalAlignment.Center };
                 var key = item.Key;
                 del.Click += (_, _) =>
                 {
@@ -456,7 +507,7 @@ public partial class ControlCenter : Window
         ResetReminders();
         RefreshDeadlines();
         UpdatePreview();
-        _app.Island?.ShowMessage("", "Good", "Deadline added", 200, 1600);
+        _app.Island?.ShowMessage("\uE73E", "Good", "Deadline added", 200, 1600);
     }
 
     // ---- calendar link ----
@@ -514,16 +565,18 @@ public partial class ControlCenter : Window
 
     static readonly TileDef[] TileDefs =
     {
-        new("Now playing", "", Color.FromRgb(0xFF, 0x37, 0x5F), () => S.Features.Media, v => S.Features.Media = v),
-        new("Volume", "", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Volume, v => S.Features.Volume = v),
-        new("Brightness", "", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Brightness, v => S.Features.Brightness = v),
-        new("Battery", "", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Battery, v => S.Features.Battery = v),
-        new("Downloads", "", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Downloads, v => S.Features.Downloads = v),
-        new("Clipboard", "", Color.FromRgb(0x5E, 0x5C, 0xE6), () => S.Features.Clipboard, v => S.Features.Clipboard = v),
-        new("Earbuds", "", Color.FromRgb(0x64, 0xD2, 0xFF), () => S.Features.Earbuds, v => S.Features.Earbuds = v),
+        new("Now playing", "\uE8D6", Color.FromRgb(0xFF, 0x37, 0x5F), () => S.Features.Media, v => S.Features.Media = v),
+        new("Volume", "\uE767", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Volume, v => S.Features.Volume = v),
+        new("Brightness", "\uE706", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Brightness, v => S.Features.Brightness = v),
+        new("Battery", "\uE83F", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Battery, v => S.Features.Battery = v),
+        new("Downloads", "\uE896", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Downloads, v => S.Features.Downloads = v),
+        new("Clipboard", "\uE77F", Color.FromRgb(0x5E, 0x5C, 0xE6), () => S.Features.Clipboard, v => S.Features.Clipboard = v),
+        new("Earbuds", "\uE7F6", Color.FromRgb(0x64, 0xD2, 0xFF), () => S.Features.Earbuds, v => S.Features.Earbuds = v),
         new("Calls & camera", "\uE717", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Calls, v => { S.Features.Calls = v; S.Features.Privacy = v; }),
-        new("Deadlines", "", Color.FromRgb(0xFF, 0x45, 0x3A), () => S.Features.Deadlines, v => S.Features.Deadlines = v),
-        new("Focus timer", "", Color.FromRgb(0xBF, 0x5A, 0xF2), () => S.Features.FocusTimer, v => S.Features.FocusTimer = v),
+        new("Deadlines", "\uE787", Color.FromRgb(0xFF, 0x45, 0x3A), () => S.Features.Deadlines, v => S.Features.Deadlines = v),
+        new("Windows Clock", "\uE916", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Clock, v => S.Features.Clock = v),
+        new("File transfers", "\uE72D", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Transfers, v => S.Features.Transfers = v),
+        new("Focus timer", "\uE708", Color.FromRgb(0xBF, 0x5A, 0xF2), () => S.Features.FocusTimer, v => S.Features.FocusTimer = v),
     };
 
     void BuildTiles()
@@ -620,6 +673,11 @@ public partial class ControlCenter : Window
 
         AddShortcutOption();
 
+        AddOption("Listen for \u201CJarvis\u201D", "Say \u201CJarvis, open Spotify\u201D without pressing anything. Keeps the microphone on; paused during calls.",
+            () => S.JarvisWakeWord, v => S.JarvisWakeWord = v);
+        AddOption("Jarvis sounds", "A soft chime when it listens and when it's done.",
+            () => S.JarvisSounds, v => S.JarvisSounds = v);
+
         var startup = AddOption("Start with Windows", null, () => false, _ => { });
         startup.IsEnabled = false;
         _ = LoadStartupAsync(startup);
@@ -635,7 +693,7 @@ public partial class ControlCenter : Window
             if (message != null)
             {
                 sw.IsChecked = false;
-                _app.Island?.ShowMessage("", "Orange", message, 420, 5000);
+                _app.Island?.ShowMessage("\uE7BA", "Orange", message, 420, 5000);
             }
         };
     }

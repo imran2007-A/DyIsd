@@ -9,6 +9,7 @@ using DyIsd.Island;
 using DyIsd.Native;
 using DyIsd.Services;
 using DyIsd.Settings;
+using DyIsd.Voice;
 
 namespace DyIsd;
 
@@ -38,6 +39,11 @@ public partial class App : Application
     public MicService Mic { get; private set; } = null!;
     public CallService Calls { get; private set; } = null!;
     public VolumeKeyHook KeyHook { get; private set; } = null!;
+    public ClockService Clock { get; private set; } = null!;
+    public RingService Ring { get; private set; } = null!;
+    public TransferService Transfers { get; private set; } = null!;
+    public JarvisService Jarvis { get; private set; } = null!;
+    bool _pttHeld;
 
     const int HotkeyFocus = 1;
     static AppSettings S => SettingsStore.Current;
@@ -80,9 +86,13 @@ public partial class App : Application
         Mic = new MicService();
         Calls = new CallService(Privacy, Mic);
         KeyHook = new VolumeKeyHook();
+        Clock = new ClockService();
+        Ring = new RingService(Calls.State);
+        Transfers = new TransferService();
         _messages = new MessageWindow();
 
-        Island = new IslandController(_window, Media.State, Timer, Downloads.State, Calls.State, Foreground);
+        Island = new IslandController(_window, Media.State, Timer, Downloads.State, Calls.State, Clock.State, Ring.State, Transfers.State, Foreground);
+        Jarvis = new JarvisService(this, Island);
         Wire();
 
         Foreground.Start();
@@ -96,6 +106,9 @@ public partial class App : Application
         Mic.Start();
         Privacy.Start();
         Earbuds.Start();
+        Clock.Start();
+        Ring.Start();
+        Transfers.Start();
         _lastCalendarUrl = S.CalendarUrl;
         Calendar.Start();
         ApplyKeyHook();
@@ -104,12 +117,13 @@ public partial class App : Application
         SettingsStore.Changed += OnSettingsChanged;
 
         await Media.StartAsync();
+        Jarvis.Start();
 
         if (!S.FirstRunDone)
         {
             S.FirstRunDone = true;
             SettingsStore.Save();
-            Island.ShowMessage("", "Accent", "DyIsd is running · hold Alt over the island to use it", 400, 6000);
+            Island.ShowMessage("\uE720", "Accent", "DyIsd is running · hold Ctrl + Space to talk to Jarvis", 400, 6000);
             OpenControlCenter();
         }
     }
@@ -128,7 +142,7 @@ public partial class App : Application
         Timer.Finished += () =>
         {
             SystemSounds.Asterisk.Play();
-            c.ShowMessage("", "Good", "Focus done · take 5", 230, 6000, fullscreenOk: true);
+            c.ShowMessage("\uE73E", "Good", Timer.Label == "Focus" ? "Focus done · take 5" : "Timer done", 230, 6000, fullscreenOk: true);
         };
 
         // Camera dot (green, like iPhone). The mic has no dot; it's used to spot calls.
@@ -156,14 +170,67 @@ public partial class App : Application
         };
 
         Earbuds.Changed += (name, connected, battery) => { if (S.Features.Earbuds) c.ShowEarbuds(name, connected, battery); };
+
+        // Windows Clock's timer / stopwatch, ringing calls, file transfers.
+        Clock.ActiveChanged += c.Render;
+        Clock.TimerDone += () =>
+        {
+            if (!S.Features.Clock) return;
+            SystemSounds.Asterisk.Play();
+            c.ShowMessage("\uE916", "Orange", "Clock timer done", 220, 6000, fullscreenOk: true);
+        };
+        Ring.ActiveChanged += () =>
+        {
+            c.RingProcesses = Ring.Processes;
+            c.Render();
+        };
+        Transfers.ActiveChanged += c.Render;
+        Transfers.Done += (title, file) => { if (S.Features.Transfers) c.ShowTransferDone(title, file); };
+
+        // Jarvis: hold Ctrl + Space to talk. The Space is swallowed so nothing gets typed.
+        KeyHook.Intercept = (vk, down) =>
+        {
+            if (!S.JarvisEnabled) return false;
+            if (vk == 0x20)
+            {
+                if (down)
+                {
+                    if (_pttHeld) return true; // key repeat while held
+                    bool ctrl = (Win32.GetAsyncKeyState(Win32.VK_CONTROL) & 0x8000) != 0;
+                    bool others = (Win32.GetAsyncKeyState(Win32.VK_SHIFT) & 0x8000) != 0 || Win32.AltDown ||
+                                  (Win32.GetAsyncKeyState(Win32.VK_LWIN) & 0x8000) != 0;
+                    if (!ctrl || others) return false;
+                    _pttHeld = true;
+                    Dispatcher.BeginInvoke(Jarvis.PttDown);
+                    return true;
+                }
+                if (!_pttHeld) return false;
+                _pttHeld = false;
+                Dispatcher.BeginInvoke(Jarvis.PttUp);
+                return true;
+            }
+            // Let go of Ctrl first: stop listening too.
+            if (!down && _pttHeld && vk is 0x11 or 0xA2 or 0xA3)
+            {
+                _pttHeld = false;
+                Dispatcher.BeginInvoke(Jarvis.PttUp);
+            }
+            return false;
+        };
         // Headphone buttons and other apps change the volume through Windows, which shows its
         // own pop-up that can't be turned off. Only show the island for changes DyIsd made,
         // so there's never a double pop-up. (When DyIsd isn't replacing Windows' pop-up, show all.)
+        bool wasMuted = Volume.Muted;
         Volume.Changed += (level, muted, byUs) =>
         {
             Media.State.Volume = muted ? 0 : level;
+            bool flipped = muted != wasMuted;
+            wasMuted = muted;
             if (!S.Features.Volume) return;
-            if (byUs || !S.HideWindowsVolumePopup) c.ShowVolume(level, muted);
+            if (!byUs && S.HideWindowsVolumePopup) return;
+            // Mute on/off looks like the iPhone's silent switch; other changes show the level.
+            if (flipped) c.ShowSilent(muted);
+            else c.ShowVolume(level, muted);
         };
         Brightness.Changed += level => { if (S.Features.Brightness) c.ShowBrightness(level); };
         Battery.Event += (ev, pct, left) => { if (S.Features.Battery) c.ShowBattery(ev, pct, left); };
@@ -173,7 +240,12 @@ public partial class App : Application
         Fullscreen.Changed += () => c.SetFullscreen(Fullscreen.IsFullscreen);
 
         c.ActionRequested += OnIslandAction;
-        c.JumpRequested += names => AppJumper.Focus(names);
+        c.JumpRequested += names =>
+        {
+            if (AppJumper.Focus(names)) return;
+            // Store apps like Clock don't always have a window to bring forward: open them instead.
+            if (names == IslandController.ClockProcesses) Open("ms-clock:");
+        };
         c.WheelRequested += (dir, shift) =>
         {
             if (shift) { if (S.Features.Brightness) Brightness.Step(dir * 5); }
@@ -222,6 +294,12 @@ public partial class App : Application
             case "shuffle": _ = Media.ToggleShuffleAsync(); break;
             case "repeat": _ = Media.CycleRepeatAsync(); break;
             case "mute": Calls.ToggleMute(S.DiscordMuteKey, S.DiscordMuteModifiers); break;
+            case "answer": Ring.Answer(); break;
+            case "decline": Ring.Decline(); break;
+            case "xfer-folder": Open(Native.Win32.DownloadsFolder()); break;
+            case "jv-yes": Jarvis.Confirm(true); break;
+            case "jv-no": Jarvis.Confirm(false); break;
+            case "jv-download": Jarvis.StartDownload(); break;
             default:
                 if (tag.StartsWith("seek:") && double.TryParse(tag[5..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seek))
                     _ = Media.SeekAsync(seek);
@@ -269,8 +347,8 @@ public partial class App : Application
 
     void ApplyKeyHook()
     {
-        // Needed for the volume keys and for noticing your Discord mute shortcut.
-        bool needed = (S.HideWindowsVolumePopup && S.Features.Volume) || S.DiscordMuteKey != 0;
+        // Needed for the volume keys, noticing your Discord mute shortcut, and Ctrl + Space for Jarvis.
+        bool needed = (S.HideWindowsVolumePopup && S.Features.Volume) || S.DiscordMuteKey != 0 || S.JarvisEnabled;
         if (needed) KeyHook.Install();
         else KeyHook.Uninstall();
     }
@@ -289,7 +367,7 @@ public partial class App : Application
     public void ShowWhatsNext()
     {
         var next = Calendar.Next();
-        if (next == null) Island!.ShowMessage("", "Accent", "Nothing coming up this week", 280);
+        if (next == null) Island!.ShowMessage("\uE787", "Accent", "Nothing coming up this week", 280);
         else Island!.ShowDeadline(next.Value.Title, next.Value.Detail);
     }
 
@@ -315,6 +393,7 @@ public partial class App : Application
     {
         _window!.ApplyPosition(S.Position);
         ApplyKeyHook();
+        Jarvis.Apply();
         if (!S.Features.FocusTimer && Timer.IsActive) Timer.End();
         _tray?.SetTimer(Timer.IsActive, S.FocusMinutes);
         if (S.CalendarUrl != _lastCalendarUrl)
@@ -344,6 +423,8 @@ public partial class App : Application
             Downloads?.Dispose();
             Foreground?.Dispose();
             Mic?.Dispose();
+            Jarvis?.Dispose();
+            Transfers?.Dispose();
             if (_messages != null) Win32.UnregisterHotKey(_messages.Handle, HotkeyFocus);
         }
         catch { }

@@ -22,11 +22,17 @@ public sealed class FocusTimer : Observable
     public string RemainingText => Format(_left);
     public double Progress => _total == 0 ? 0 : (double)_left / _total;
     public string PauseText => _running ? "Pause" : "Resume";
-    public string SubText => $"Focus · {_total / 60} min session";
+    /// <summary>"Focus" from the hotkey, "Timer" when Jarvis set it.</summary>
+    public string Label { get; private set; } = "Focus";
+    public string SubText => Label == "Focus" ? $"Focus · {_total / 60} min session"
+        : _total >= 60 ? $"{Label} · {_total / 60} min" : $"{Label} · {_total} s";
 
-    public void Start(int minutes)
+    public void Start(int minutes, string label = "Focus") => StartSeconds(Math.Max(1, minutes) * 60, label);
+
+    public void StartSeconds(int seconds, string label)
     {
-        _total = _left = Math.Max(1, minutes) * 60;
+        Label = label;
+        _total = _left = Math.Max(1, seconds);
         StartedAt = DateTime.Now;
         _running = true;
         _timer.Start();

@@ -34,8 +34,13 @@ public partial class IslandWindow : Window
     public event Action<string>? Dropped;
     /// <summary>True when the mouse enters the island, false when it leaves.</summary>
     public event Action<bool>? HoverChanged;
+    /// <summary>Dragged upward and let go: hide what's showing.</summary>
+    public event Action? FlickedUp;
+    /// <summary>The small circle beside the island (second activity) was clicked.</summary>
+    public event Action? BubbleClicked;
 
     const double WinWidth = 420, WinHeight = 250, Gap = 14;
+    public const double BubbleSize = 34, BubbleGap = 6;
 
     readonly IEasingFunction _spring = new SpringEase();
     readonly IEasingFunction _smooth = new CubicEase { EasingMode = EasingMode.EaseOut };
@@ -87,6 +92,7 @@ public partial class IslandWindow : Window
         };
         var align = pos switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
         Pill.HorizontalAlignment = align;
+        Bubble.HorizontalAlignment = align;
         Presenter.HorizontalAlignment = align;
         PrivacyDot.HorizontalAlignment = align;
         Pill.RenderTransformOrigin = new Point(pos == "left" ? 0 : pos == "right" ? 1 : 0.5, 0);
@@ -121,11 +127,13 @@ public partial class IslandWindow : Window
     {
         if (templateKey != _templateKey || logicalKind != _logicalKind)
         {
+            bool morph = _shown && _templateKey != null;
             Presenter.ContentTemplate = (DataTemplate)Resources[templateKey];
             Presenter.Content = data;
             BlurIn();
             _templateKey = templateKey;
             _logicalKind = logicalKind;
+            if (morph) Wobble();
         }
         else if (!ReferenceEquals(Presenter.Content, data))
         {
@@ -155,12 +163,101 @@ public partial class IslandWindow : Window
         Animate(Pill, HeightProperty, height);
     }
 
+    /// <summary>
+    /// Liquid morph: when the island turns into something else it squashes a little and
+    /// springs back, like a drop of liquid, on top of the size change.
+    /// </summary>
+    void Wobble()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+        MorphScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1.05, 1, TimeSpan.FromMilliseconds(620)) { EasingFunction = _spring });
+        MorphScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.9, 1, TimeSpan.FromMilliseconds(620)) { EasingFunction = _spring });
+    }
+
+    // ---------- the second activity's circle ----------
+
+    string? _bubbleTemplate;
+    object? _bubbleData;
+    bool _bubbleShown;
+
+    /// <summary>Shows (template != null) or hides the circle beside an island this wide.</summary>
+    public void SetBubble(string? template, object? data, double pillWidth)
+    {
+        if (template == null || !_shown)
+        {
+            if (!_bubbleShown) return;
+            _bubbleShown = false;
+            _bubbleTemplate = null;
+            Bubble.IsHitTestVisible = false;
+            Animate(Bubble, OpacityProperty, 0, 160, _smooth);
+            Animate(BubbleScale, ScaleTransform.ScaleXProperty, 0.3, 220, _smooth);
+            Animate(BubbleScale, ScaleTransform.ScaleYProperty, 0.3, 220, _smooth);
+            Animate(BubbleShift, TranslateTransform.XProperty, BubbleX(pillWidth) - Dir * 22, 220, _smooth);
+            return;
+        }
+
+        if (template != _bubbleTemplate || !ReferenceEquals(data, _bubbleData))
+        {
+            BubblePresenter.ContentTemplate = (DataTemplate)Resources[template];
+            BubblePresenter.Content = data;
+            _bubbleTemplate = template;
+            _bubbleData = data;
+        }
+        double x = BubbleX(pillWidth);
+        if (!_bubbleShown)
+        {
+            // Buds off the island's edge and springs out to its spot.
+            _bubbleShown = true;
+            Bubble.IsHitTestVisible = true;
+            BubbleShift.BeginAnimation(TranslateTransform.XProperty, null);
+            BubbleShift.X = x - Dir * 26;
+            Animate(Bubble, OpacityProperty, 1, 220, _smooth);
+            Animate(BubbleScale, ScaleTransform.ScaleXProperty, 1, 640);
+            Animate(BubbleScale, ScaleTransform.ScaleYProperty, 1, 640);
+        }
+        Animate(BubbleShift, TranslateTransform.XProperty, x, 640);
+    }
+
+    /// <summary>+1 when the circle sits to the right of the island, -1 when to the left.</summary>
+    double Dir => _pos == "right" ? -1 : 1;
+
+    double BubbleX(double pillWidth) => _pos switch
+    {
+        "left" => pillWidth + BubbleGap,
+        "right" => -(pillWidth + BubbleGap),
+        _ => pillWidth / 2 + BubbleGap + BubbleSize / 2,
+    };
+
+    void Bubble_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        Squish(BubblePress, true);
+        e.Handled = true;
+    }
+
+    void Bubble_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        Squish(BubblePress, false);
+        e.Handled = true;
+        BubbleClicked?.Invoke();
+    }
+
+    void Bubble_MouseLeave(object sender, MouseEventArgs e) => Squish(BubblePress, false);
+
+    /// <summary>Press squish: shrinks a touch while held, springs back on release.</summary>
+    void Squish(ScaleTransform t, bool down)
+    {
+        double to = down ? 0.94 : 1;
+        Animate(t, ScaleTransform.ScaleXProperty, to, down ? 140 : 520, down ? _smooth : _spring);
+        Animate(t, ScaleTransform.ScaleYProperty, to, down ? 140 : 520, down ? _smooth : _spring);
+    }
+
     public void HideIsland()
     {
         if (!_shown) return;
         _shown = false;
         _templateKey = _logicalKind = null;
         Pill.IsHitTestVisible = false;
+        SetBubble(null, null, Pill.ActualWidth);
         Animate(Pill, OpacityProperty, 0, 200, _smooth);
         Animate(PillScale, ScaleTransform.ScaleXProperty, 0.5, 260, _smooth);
         Animate(PillScale, ScaleTransform.ScaleYProperty, 0.5, 260, _smooth);
@@ -236,7 +333,7 @@ public partial class IslandWindow : Window
 
     Point? _down;
     double _downLeft;
-    bool _dragging;
+    bool _dragging, _flicking;
 
     Point ScreenDip(MouseEventArgs e)
     {
@@ -249,24 +346,66 @@ public partial class IslandWindow : Window
     {
         _down = ScreenDip(e);
         _downLeft = Left;
-        _dragging = false;
+        _dragging = _flicking = false;
         Pill.CaptureMouse();
+        Squish(PressScale, true);
         e.Handled = true;
     }
 
     void Pill_MouseMove(object sender, MouseEventArgs e)
     {
-        if (_down == null || e.LeftButton != MouseButtonState.Pressed) return;
-        double dx = ScreenDip(e).X - _down.Value.X;
+        if (_down == null || e.LeftButton != MouseButtonState.Pressed || _flicking) return;
+        var now = ScreenDip(e);
+        double dx = now.X - _down.Value.X, dy = now.Y - _down.Value.Y;
+        // Upward and more up than sideways: a flick, like swiping the iPhone island away.
+        if (!_dragging && dy < -12 && -dy > Math.Abs(dx))
+        {
+            Flick();
+            return;
+        }
         if (!_dragging && Math.Abs(dx) < 6) return;
         _dragging = true;
         Left = _downLeft + dx;
+    }
+
+    void Flick()
+    {
+        _flicking = true;
+        _down = null;
+        Pill.ReleaseMouseCapture();
+        Squish(PressScale, false);
+        Pill.IsHitTestVisible = false;
+        SetBubble(null, null, Pill.ActualWidth);
+        var up = new DoubleAnimation(-44, TimeSpan.FromMilliseconds(Ms(200))) { EasingFunction = _smooth };
+        up.Completed += (_, _) =>
+        {
+            // Reset off-screen, then let the controller show whatever is next (it pops in fresh).
+            FlickMove.BeginAnimation(TranslateTransform.YProperty, null);
+            FlickMove.Y = 0;
+            Pill.BeginAnimation(OpacityProperty, null);
+            Pill.Opacity = 0;
+            PillScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            PillScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            PillScale.ScaleX = PillScale.ScaleY = 0.5;
+            _shown = false;
+            _templateKey = _logicalKind = null;
+            _flicking = false;
+            if (_hover)
+            {
+                _hover = false;
+                HoverChanged?.Invoke(false);
+            }
+            FlickedUp?.Invoke();
+        };
+        FlickMove.BeginAnimation(TranslateTransform.YProperty, up);
+        Animate(Pill, OpacityProperty, 0, 180, _smooth);
     }
 
     void Pill_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_down == null) return;
         Pill.ReleaseMouseCapture();
+        Squish(PressScale, false);
         bool wasDrag = _dragging;
         _down = null;
         _dragging = false;

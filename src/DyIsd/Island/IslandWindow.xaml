@@ -328,6 +328,198 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>
+
+        <!-- ============ SILENT SWITCH (like iPhone's ring / silent switch) ============ -->
+        <DataTemplate x:Key="silent">
+            <Grid Margin="5,0,16,0">
+                <Border HorizontalAlignment="Left" Width="52" Height="26" CornerRadius="13" Background="{Binding AvatarBrush}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" FontSize="14" Foreground="White" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.15">
+                        <TextBlock.RenderTransform><RotateTransform/></TextBlock.RenderTransform>
+                        <TextBlock.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="RenderTransform.Angle" BeginTime="0:0:0.12">
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.07" Value="-24"/>
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.16" Value="20"/>
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="-14"/>
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.34" Value="9"/>
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.43" Value="-4"/>
+                                            <EasingDoubleKeyFrame KeyTime="0:0:0.52" Value="0"/>
+                                        </DoubleAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </TextBlock.Triggers>
+                    </TextBlock>
+                </Border>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding Title}" Foreground="{Binding RightBrush}" FontWeight="SemiBold" FontSize="13.5"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ============ WINDOWS CLOCK: timer / stopwatch ============ -->
+        <DataTemplate x:Key="clock-c">
+            <Grid Margin="11,0,12,0" FlowDirection="{DynamicResource CompactFlow}">
+                <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding Accent}" FontSize="15" HorizontalAlignment="Left"/>
+                <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" FlowDirection="LeftToRight" Text="{Binding Text}" FontWeight="SemiBold" Foreground="{Binding Accent}" Typography.NumeralAlignment="Tabular"/>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="clock-e">
+            <DockPanel Margin="18,0" VerticalAlignment="Center">
+                <Border DockPanel.Dock="Left" Width="46" Height="46" CornerRadius="23" Background="{DynamicResource Chip}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding Accent}" FontSize="20" HorizontalAlignment="Center"/>
+                </Border>
+                <Button DockPanel.Dock="Right" Style="{StaticResource PillBtn}" Content="Open Clock" Tag="jump" Click="OnAction" VerticalAlignment="Center"/>
+                <StackPanel Margin="14,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Text}" FontSize="28" FontWeight="SemiBold" Foreground="{Binding Accent}" Typography.NumeralAlignment="Tabular"/>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Mute}"/>
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+
+        <!-- ============ INCOMING CALL (ringing) ============ -->
+        <DataTemplate x:Key="ring-e">
+            <DockPanel Margin="14,0" VerticalAlignment="Center">
+                <Border DockPanel.Dock="Left" Width="48" Height="48" CornerRadius="24" Background="{Binding AppColor}">
+                    <TextBlock Text="{Binding Initial}" FontSize="20" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Tag="decline" Click="OnAction" Width="46" Height="46" Focusable="False" Cursor="Hand" ToolTip="Decline">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="B" CornerRadius="23" Background="{DynamicResource Bad}">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE778;" Foreground="White" FontSize="18" HorizontalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.7"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button Tag="answer" Click="OnAction" Width="46" Height="46" Margin="12,0,0,0" Focusable="False" Cursor="Hand" ToolTip="Answer">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="B" CornerRadius="23" Background="{DynamicResource Good}">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE717;" Foreground="White" FontSize="18" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                        <TextBlock.RenderTransform><RotateTransform/></TextBlock.RenderTransform>
+                                        <TextBlock.Triggers>
+                                            <EventTrigger RoutedEvent="Loaded">
+                                                <BeginStoryboard>
+                                                    <Storyboard RepeatBehavior="Forever">
+                                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="RenderTransform.Angle" Duration="0:0:1.4">
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.06" Value="-16"/>
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.14" Value="16"/>
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.22" Value="-16"/>
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.30" Value="16"/>
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.38" Value="-10"/>
+                                                            <LinearDoubleKeyFrame KeyTime="0:0:0.46" Value="0"/>
+                                                        </DoubleAnimationUsingKeyFrames>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                        </TextBlock.Triggers>
+                                    </TextBlock>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.7"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+                <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Who}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Mute}"/>
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+
+        <!-- ============ FILE TRANSFERS (Bluetooth / Nearby Share) ============ -->
+        <DataTemplate x:Key="xfer-c">
+            <Grid Margin="11,0,10,0" FlowDirection="{DynamicResource CompactFlow}">
+                <TextBlock Style="{StaticResource Glyph}" Text="&#xE72D;" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/>
+                <c:RingProgress Width="19" Height="19" HorizontalAlignment="Right" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"
+                                Visibility="{Binding KnowsProgress, Converter={StaticResource BoolToVis}}"/>
+                <c:Equalizer HorizontalAlignment="Right" Width="20" Height="12" IsPlaying="True" Fill="{DynamicResource Accent}"
+                             Visibility="{Binding Unknown, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="xfer-e">
+            <Grid Margin="16,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <DockPanel VerticalAlignment="Center">
+                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="&#xE72D;" Foreground="{DynamicResource Accent}" FontSize="20"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding PercentText}" FontWeight="SemiBold" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"/>
+                    <StackPanel Margin="12,0,10,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Head}"/>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource Mute}"/>
+                    </StackPanel>
+                </DockPanel>
+                <Grid Grid.Row="1" Margin="0,10,0,0">
+                    <c:ProgressLine Height="5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"
+                                    Visibility="{Binding KnowsProgress, Converter={StaticResource BoolToVis}}"/>
+                    <c:ProgressLine Height="5" IsIndeterminate="True" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"
+                                    Visibility="{Binding Unknown, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ============ JARVIS ============ -->
+        <DataTemplate x:Key="jarvis">
+            <Grid Margin="7,0,14,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <!-- a glowing orb -->
+                <Ellipse Width="26" Height="26">
+                    <Ellipse.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#64D2FF" Offset="0"/>
+                            <GradientStop Color="#5E5CE6" Offset="0.55"/>
+                            <GradientStop Color="#BF5AF2" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <TextBlock Style="{StaticResource Glyph}" Text="&#xE720;" FontSize="12" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Margin="10,0" Text="{Binding Text}" Style="{StaticResource Head}" VerticalAlignment="Center"/>
+                <Grid Grid.Column="2" Width="28" Height="16">
+                    <c:VoiceWave Level="{Binding Level}" Fill="#64D2FF" Visibility="{Binding IsListening, Converter={StaticResource BoolToVis}}"/>
+                    <c:Equalizer IsPlaying="True" Fill="#BF5AF2" Visibility="{Binding IsThinking, Converter={StaticResource BoolToVis}}"/>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <!-- ============ SECOND ACTIVITY (the small circle) ============ -->
+        <DataTemplate x:Key="b-media">
+            <Border Width="20" Height="20" CornerRadius="10" Background="{Binding ArtBrush}"/>
+        </DataTemplate>
+        <DataTemplate x:Key="b-call">
+            <TextBlock Style="{StaticResource Glyph}" Text="&#xE717;" Foreground="{DynamicResource Good}" FontSize="14"/>
+        </DataTemplate>
+        <DataTemplate x:Key="b-ring">
+            <Border Width="22" Height="22" CornerRadius="11" Background="{Binding AppColor}">
+                <TextBlock Style="{StaticResource Glyph}" Text="&#xE717;" Foreground="White" FontSize="11" HorizontalAlignment="Center"/>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="b-timer">
+            <c:RingProgress Width="18" Height="18" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Orange}"/>
+        </DataTemplate>
+        <DataTemplate x:Key="b-clock">
+            <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding Accent}" FontSize="14"/>
+        </DataTemplate>
+        <DataTemplate x:Key="b-dl">
+            <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource Accent}" FontSize="14"/>
+        </DataTemplate>
+        <DataTemplate x:Key="b-xfer">
+            <c:RingProgress Width="18" Height="18" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid x:Name="Root">
@@ -339,9 +531,33 @@
                 MouseRightButtonUp="Pill_MouseRightButtonUp" MouseWheel="Pill_MouseWheel"
                 MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave" Cursor="Hand">
             <Border.RenderTransform>
-                <ScaleTransform x:Name="PillScale" ScaleX="0.5" ScaleY="0.5"/>
+                <TransformGroup>
+                    <!-- appear / disappear -->
+                    <ScaleTransform x:Name="PillScale" ScaleX="0.5" ScaleY="0.5"/>
+                    <!-- press squish -->
+                    <ScaleTransform x:Name="PressScale"/>
+                    <!-- liquid morph between views -->
+                    <ScaleTransform x:Name="MorphScale"/>
+                    <!-- flick up to dismiss -->
+                    <TranslateTransform x:Name="FlickMove"/>
+                </TransformGroup>
             </Border.RenderTransform>
             <ContentPresenter x:Name="Presenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+
+        <!-- the second activity, in a small circle beside the island; click to swap -->
+        <Border x:Name="Bubble" Width="34" Height="34" CornerRadius="17" Margin="14,8,14,0" VerticalAlignment="Top" HorizontalAlignment="Center"
+                Opacity="0" IsHitTestVisible="False" Background="{DynamicResource IslandBg}" BorderBrush="{DynamicResource IslandBorder}" BorderThickness="1"
+                ClipToBounds="True" Cursor="Hand" RenderTransformOrigin="0.5,0.5" ToolTip="Click to swap"
+                MouseLeftButtonDown="Bubble_MouseLeftButtonDown" MouseLeftButtonUp="Bubble_MouseLeftButtonUp" MouseLeave="Bubble_MouseLeave">
+            <Border.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="BubbleScale" ScaleX="0.3" ScaleY="0.3"/>
+                    <ScaleTransform x:Name="BubblePress"/>
+                    <TranslateTransform x:Name="BubbleShift"/>
+                </TransformGroup>
+            </Border.RenderTransform>
+            <ContentPresenter x:Name="BubblePresenter" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
         <!-- camera in use (green, like iPhone) -->

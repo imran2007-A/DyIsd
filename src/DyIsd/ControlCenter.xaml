@@ -166,12 +166,35 @@
                         <Button DockPanel.Dock="Right" Style="{StaticResource GhostIcon}" Content="&#xE711;" Click="Close_Click" ToolTip="Close" VerticalAlignment="Center"/>
                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="DyIsd" FontWeight="Bold" FontSize="16"/>
-                            <TextBlock Text="Hold Alt over the island to use it" Style="{StaticResource Sub}"/>
+                            <TextBlock Text="Click the island · hold Ctrl + Space for Jarvis" Style="{StaticResource Sub}"/>
                         </StackPanel>
                     </DockPanel>
 
-                    <!-- focus -->
+                    <!-- jarvis -->
                     <Border Background="{DynamicResource Card}" CornerRadius="18" Padding="14" Margin="0,14,0,0">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Left" Width="40" Height="40" VerticalAlignment="Top">
+                                <Ellipse>
+                                    <Ellipse.Fill>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#64D2FF" Offset="0"/>
+                                            <GradientStop Color="#5E5CE6" Offset="0.55"/>
+                                            <GradientStop Color="#BF5AF2" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE720;" Foreground="White" FontSize="17"/>
+                            </Grid>
+                            <Button x:Name="JarvisBtn" DockPanel.Dock="Right" Style="{StaticResource WhiteBtn}" Content="Get it" VerticalAlignment="Top" Click="Jarvis_Click"/>
+                            <StackPanel Margin="12,0,8,0">
+                                <TextBlock Text="Jarvis" FontWeight="SemiBold" FontSize="13.5" Margin="0,1,0,3"/>
+                                <TextBlock x:Name="JarvisSub" Style="{StaticResource Sub}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- focus -->
+                    <Border Background="{DynamicResource Card}" CornerRadius="18" Padding="14" Margin="0,8,0,0">
                         <DockPanel>
                             <Border DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="20" Background="{DynamicResource Orange}" VerticalAlignment="Top">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE708;" Foreground="Black" FontSize="18"/>

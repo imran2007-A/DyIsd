@@ -11,8 +11,9 @@ at the file where it happens.
       → `IslandWindow.xaml` (AllowsTransparency, Topmost) and `SetExStyle()`
 - [ ] Routed events: how the seek bar tells the window you let go → `Controls/ProgressLine.cs`
 - [ ] The spring animation: an easing function is just math → `Controls/SpringEase.cs`
-- [ ] How the app decides what the island shows (newest activity, hidden if you're in its app)
-      → `src/DyIsd/Island/IslandController.cs` → `PickActivity()`
+- [ ] How the app decides what the island shows (priority order, second one in the circle,
+      hidden if you're in its app, flicked ones hidden until they change)
+      → `src/DyIsd/Island/IslandController.cs` → `PickActivities()` and `Signature()`
 - [ ] Data binding: `{Binding Title}` in XAML + `INotifyPropertyChanged` in C#
       → `Island/Models.cs`
 - [ ] Events: services raise events, `App.xaml.cs` connects them to the island
@@ -41,6 +42,26 @@ at the file where it happens.
 - [ ] Downloads: `FileSystemWatcher` and browser temp files → `Services/DownloadService.cs`
 - [ ] Global hotkey (Ctrl+Alt+F): `RegisterHotKey` → `App.xaml.cs`
 - [ ] P/Invoke: calling raw Windows functions from C# → `Native/Win32.cs`
+
+- [ ] UI Automation: reading and pressing buttons in other apps (ringing calls, Clock, transfers)
+      → `Services/Uia.cs`, `Services/RingService.cs`, `Services/ClockService.cs`, `Services/TransferService.cs`
+- [ ] Which apps are making sound (Core Audio sessions) → `Services/AudioSessions.cs`
+- [ ] Animations: transform groups, keyframes, the liquid morph and flick
+      → `IslandWindow.xaml.cs` → `Wobble()`, `Flick()`, `Squish()`, `SetBubble()`
+
+## Jarvis (voice control)
+- [ ] Recording the mic and cutting speech into phrases (voice activity detection: loudness vs
+      the room's noise) → `Voice/AudioInput.cs`
+- [ ] Speech to text with Whisper, and what "running on the GPU with Vulkan" means → `Voice/SpeechEngine.cs`
+- [ ] Regular expressions: how hundreds of phrasings become one command → `Voice/CommandParser.cs`
+      (start with `BuildRules()`; try changing a phrase and running the parser test)
+- [ ] Parsing dates like "tomorrow at 5 pm" → `CommandParser.ParseReminder()`
+- [ ] A tiny calculator (recursive descent parser) → `CommandParser.Calc()` / `Expr()` / `Term()`
+- [ ] Pretending to be the keyboard and mouse (SendInput) → `Voice/InputSim.cs`
+- [ ] Catching Ctrl + Space system-wide and swallowing the Space → `App.xaml.cs` → `KeyHook.Intercept`
+- [ ] Making a sound wave in code (a WAV file is just numbers) → `Voice/Chime.cs`
+- [ ] Later, adding AI: "select, don't generate" (the AI picks one of these commands, it never
+      runs anything it made up) → ask Claude when you get here
 
 ## Packaging
 - [ ] What MSIX is, what a certificate is, and why Install.bat trusts one → `packaging/`

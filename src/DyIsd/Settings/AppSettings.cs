@@ -19,6 +19,10 @@ public sealed class FeatureFlags
     public bool Privacy { get; set; } = true;
     public bool Calls { get; set; } = true;
     public bool Earbuds { get; set; } = true;
+    /// <summary>The Windows Clock app's timer and stopwatch.</summary>
+    public bool Clock { get; set; } = true;
+    /// <summary>Bluetooth and Nearby Share file transfers.</summary>
+    public bool Transfers { get; set; } = true;
 }
 
 public sealed class ManualDeadline
@@ -58,6 +62,13 @@ public sealed class AppSettings
     public int DiscordMuteModifiers { get; set; }
     public List<ManualDeadline> ManualDeadlines { get; set; } = new();
     public bool FirstRunDone { get; set; }
+
+    /// <summary>Jarvis voice control (hold Ctrl + Space).</summary>
+    public bool JarvisEnabled { get; set; } = true;
+    /// <summary>Also listen for "Jarvis" all the time (keeps the microphone on).</summary>
+    public bool JarvisWakeWord { get; set; } = true;
+    /// <summary>Soft sounds when Jarvis starts listening and answers.</summary>
+    public bool JarvisSounds { get; set; } = true;
 }
 
 /// <summary>Loads and saves settings to %LOCALAPPDATA%\DyIsd\settings.json.</summary>

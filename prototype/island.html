@@ -224,6 +224,41 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .cc-foot{display:flex;gap:8px;margin-top:16px}
 .cc-foot button{flex:1}
 
+
+/* second activity: small circle beside the island (click to swap) */
+.bubble{position:absolute;top:8px;width:34px;height:34px;border-radius:50%;background:#000;color:#fff;z-index:10;display:grid;place-items:center;cursor:pointer;
+  box-shadow:0 0 0 1px rgba(255,255,255,.06);transition:left .62s cubic-bezier(.3,1.4,.5,1),transform .62s cubic-bezier(.3,1.4,.5,1),opacity .2s;font-family:var(--ios)}
+.bubble.hidden{opacity:0;transform:scale(.3);pointer-events:none}
+.bubble.pressed{transform:scale(.9);transition-duration:.12s}
+.bubble .ic{width:15px;height:15px}
+/* press squish, flick up, liquid morph */
+.island.pressed{transform:scale(.95);transition:width .52s var(--spring),height .52s var(--spring),border-radius .52s var(--spring),left .52s var(--spring),transform .14s ease}
+.island.flick{transform:translateY(-46px) scale(.9);opacity:0;transition:transform .2s ease-in,opacity .18s ease-in}
+.island.instant{transition:none!important}
+.island.morph{animation:morph .62s cubic-bezier(.3,1.5,.5,1)}
+@keyframes morph{0%{transform:scale(1.05,.9)}100%{transform:none}}
+/* silent switch */
+.silent-cap{width:52px;height:26px;border-radius:13px;display:grid;place-items:center;flex:none}
+.silent-cap .ic{width:15px;height:15px;transform-origin:50% 15%;animation:bell .55s ease .1s}
+@keyframes bell{14%{transform:rotate(-24deg)}30%{transform:rotate(20deg)}46%{transform:rotate(-14deg)}62%{transform:rotate(9deg)}78%{transform:rotate(-4deg)}100%{transform:none}}
+/* ringing */
+.cbtn.dec{background:#FF453A;color:#fff}.cbtn.ans{background:#30D158;color:#fff}
+.cbtn.ans svg{animation:shake 1.4s ease-in-out infinite}
+@keyframes shake{0%,34%,100%{transform:none}4%,12%,20%{transform:rotate(-16deg)}8%,16%,24%{transform:rotate(16deg)}}
+/* jarvis */
+.orb{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#64D2FF,#5E5CE6 55%,#BF5AF2);display:grid;place-items:center;flex:none;box-shadow:0 0 12px rgba(100,210,255,.35)}
+.orb .ic{width:13px;height:13px}
+.orb.lg{width:40px;height:40px}.orb.lg .ic{width:19px;height:19px}
+.jwave{display:flex;gap:2.5px;align-items:center;height:16px;flex:none}
+.jwave i{width:3px;border-radius:2px;background:#64D2FF;height:25%;transition:height .08s}
+.jv{display:grid;gap:10px}
+.jv-row{display:flex;gap:8px}
+.jv input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 10px;font:inherit}
+.holdbtn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#64D2FF,#5E5CE6 55%,#BF5AF2);color:#fff;touch-action:none;white-space:nowrap}
+.holdbtn[aria-pressed=true]{filter:brightness(1.2);box-shadow:0 0 0 3px rgba(94,92,230,.35)}
+.jv-chips{display:flex;flex-wrap:wrap;gap:6px}
+.jv-chips button{font-size:12px}
+.jv-card{background:#1c1c1e;border-radius:18px;padding:14px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
 /* ---------- controls below ---------- */
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
 @media (max-width:900px){.grid{grid-template-columns:1fr}}
@@ -240,7 +275,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .altbtn[aria-pressed=true]{border-color:var(--acc);background:var(--acc);color:var(--surface)}
 .note{font-size:12.5px;color:var(--mute);margin:8px 0 0;line-height:1.5}
 .side{display:grid;gap:16px}
-@media (prefers-reduced-motion: reduce){.island,.cc,.pdot{transition-duration:.01s!important}.content.fade{animation:none}.eq.on i{animation:none}}
+@media (prefers-reduced-motion: reduce){.island,.cc,.pdot,.bubble{transition-duration:.01s!important}.content.fade,.island.morph,.silent-cap .ic,.cbtn.ans svg{animation:none}.eq.on i{animation:none}}
 </style>
 
 <main>
@@ -248,7 +283,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
     <img id="logo" alt="" width="44" height="44">
     <div>
       <h1>DyIsd</h1>
-      <p>Click the island to open it. Click the taskbar apps to switch which app you're in: things running in that app only show once you leave it. Pause the music and the island vanishes.</p>
+      <p>Click the island to open it. Click the taskbar apps to switch which app you're in: things running in that app only show once you leave it. Two things at once? The second sits in a circle beside the island; click it to swap. Flick the island up to hide something until it changes. Hold <kbd>Ctrl</kbd> + <kbd>Space</kbd> to talk to Jarvis.</p>
     </div>
   </header>
 
@@ -265,6 +300,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
       <div class="zone" data-z="right">Right</div>
 
       <div class="island hidden" id="island" aria-label="Dynamic island"><div class="content" id="content"></div></div>
+      <div class="bubble hidden" id="bubble" role="button" aria-label="Second activity: click to swap"></div>
       <div class="pdot" id="pdot"></div>
       <div class="cc closed" id="cc" role="dialog" aria-label="DyIsd Control Center"></div>
 
@@ -277,7 +313,7 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
       </div>
     </div>
   </div>
-  <p class="hint"><span><b>Click</b>: open</span><span><b>Right-click</b>: jump to the app</span><span><b>Drag</b>: move left / center / right</span><span><b>Scroll</b>: volume</span><span><b>Tray icon</b>: Control Center</span></p>
+  <p class="hint"><span><b>Click</b>: open</span><span><b>Right-click</b>: jump to the app</span><span><b>Drag sideways</b>: move left / center / right</span><span><b>Drag up</b>: flick away</span><span><b>Scroll</b>: volume</span><span><b>Ctrl + Space</b>: Jarvis</span><span><b>Tray icon</b>: Control Center</span></p>
 
   <div class="grid">
     <section class="panel" aria-labelledby="eh">
@@ -285,10 +321,16 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
       <div class="ev-groups" id="events"></div>
     </section>
     <div class="side">
+      <section class="panel jv" aria-labelledby="jh">
+        <h2 id="jh" style="margin:0">Jarvis</h2>
+        <div class="jv-row"><input id="jvText" value="open spotify and set volume to 30" aria-label="What you'd say"><button class="holdbtn" id="holdBtn" aria-pressed="false">Hold to talk</button></div>
+        <p class="note" style="margin:0">Type what you'd say, then hold the button (or <kbd>Ctrl</kbd> + <kbd>Space</kbd>) and let go. <span id="micNote"></span></p>
+        <div class="jv-chips" id="jvChips"></div>
+      </section>
       <section class="panel">
         <h2>Demo</h2>
         <button class="btn primary" id="demoBtn">Run a 30-second demo</button>
-        <p class="note">Music in Spotify while you're in Word, volume up, earbuds connect, a WhatsApp call starts (the call takes over the island), you mute, the call ends, then the music pauses and the island vanishes.</p>
+        <p class="note">Music in Spotify while you're in Word, a Clock timer starts (it takes the island, music moves to the circle), the silent switch, a WhatsApp call rings and you answer, you mute, the call ends, Jarvis turns the volume down, then everything stops.</p>
       </section>
     </div>
   </div>
@@ -353,6 +395,13 @@ const I={
   pin:sv('<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'),
   eye:sv('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'),
   power:sv('<path d="M12 3v8M6.5 6.5a7.5 7.5 0 1 0 11 0"/>'),
+  bell:sv('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" fill="currentColor"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>'),
+  belloff:sv('<path d="M6 16.5V11a6 6 0 0 1 9.4-4.9M18 10.5v6l1.5 2H8" fill="currentColor"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0M3.5 3.5l17 17"/>'),
+  share:sv('<circle cx="17.5" cy="5.5" r="2.5" fill="currentColor"/><circle cx="6.5" cy="12" r="2.5" fill="currentColor"/><circle cx="17.5" cy="18.5" r="2.5" fill="currentColor"/><path d="m8.7 10.8 6.6-4M8.7 13.2l6.6 4"/>'),
+  hang:'<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3.2 13.6c-.4-.5-.4-1.2.1-1.7C8.1 7.7 15.9 7.7 20.7 11.9c.5.5.5 1.2.1 1.7l-1.6 1.8c-.4.5-1.1.6-1.6.2l-2.4-1.7c-.4-.3-.6-.8-.5-1.3l.3-1.5a12 12 0 0 0-6 0l.3 1.5c.1.5-.1 1-.5 1.3l-2.4 1.7c-.5.4-1.2.3-1.6-.2z"/></svg>',
+  watch:sv('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 2.5h5M12 2.5v3.5"/>'),
+  key:sv('<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/>'),
+  globe:sv('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.4 3.6 5.2 3.6 8.5s-1.1 6.1-3.6 8.5c-2.5-2.4-3.6-5.2-3.6-8.5S9.5 5.9 12 3.5z"/>'),
   link:sv('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>')
 };
 const ring=(pct,size,c)=>`<svg class="ring" width="${size}" height="${size}" viewBox="0 0 20 20" style="--c:${c||'#FF9F0A'}"><circle class="trk" cx="10" cy="10" r="8"/><circle class="v js-ring" cx="10" cy="10" r="8" pathLength="100" style="stroke-dashoffset:${100-pct}"/></svg>`;
@@ -366,16 +415,20 @@ const APPS={
   spotify:{name:'Spotify',color:'#1DB954',letter:'S',tab:'Spotify Premium',title:'Liked Songs'},
   whatsapp:{name:'WhatsApp',color:'#25D366',letter:'W',tab:'WhatsApp',title:'Rahul · voice call'},
   discord:{name:'Discord',color:'#5865F2',letter:'D',tab:'#general | DyIsd Squad - Discord',title:'DyIsd Squad · General voice'},
-  vscode:{name:'VS Code',color:'#0078D4',letter:'<>',tab:'island.cs – DyIsd – Visual Studio Code',title:'DyIsd'}
+  vscode:{name:'VS Code',color:'#0078D4',letter:'<>',tab:'island.cs – DyIsd – Visual Studio Code',title:'DyIsd'},
+  clock:{name:'Clock',color:'#0067C0',letter:'◷',tab:'Clock',title:'Timer'}
 };
-const TB_ORDER=['word','chrome','spotify','whatsapp','discord','vscode'];
+const TB_ORDER=['word','chrome','spotify','whatsapp','discord','vscode','clock'];
 
 /* ---------- state ---------- */
 const S={
   pos:'center',fg:'word',pausedHere:false,shuffle:false,repeat:0,
   call:{app:'whatsapp',who:'Rahul',since:0,muted:false},discordKey:'Ctrl + Shift + M',
-  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,calls:true,earbuds:true,deadlines:true,focus:true},
-  opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true},
+  f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,calls:true,earbuds:true,deadlines:true,focus:true,clock:true,transfers:true},
+  opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true,wake:true,jsounds:true},
+  clock:{mode:'timer',t:300},ring:{app:'whatsapp',who:'Amma'},xfer:{title:'Sending · Bluetooth',file:'Resume_Imran.pdf',pct:0},
+  muted:false,dismissed:{},pref:null,prefPair:null,
+  jarvis:{ready:false,dl:-1,on:true,pending:null},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
@@ -400,7 +453,8 @@ try{const s=JSON.parse(localStorage.getItem('dyisd-proto2')||'{}');
   if(s.f)Object.assign(S.f,s.f);if(s.opt)Object.assign(S.opt,s.opt);
   if(s.focusMin)S.focusMin=s.focusMin;
 }catch(e){}
-const save=()=>{try{localStorage.setItem('dyisd-proto2',JSON.stringify({pos:S.pos,f:S.f,opt:S.opt,focusMin:S.focusMin}))}catch(e){}};
+const save=()=>{try{localStorage.setItem('dyisd-proto2',JSON.stringify({pos:S.pos,f:S.f,opt:S.opt,focusMin:S.focusMin,jready:S.jarvis.ready}))}catch(e){}};
+try{if(JSON.parse(localStorage.getItem('dyisd-proto2')||'{}').jready)S.jarvis.ready=true}catch(e){}
 
 const TRACKS=[
   {title:'Hukum',artist:'Anirudh Ravichander',dur:204,art:'linear-gradient(135deg,#f7b733,#fc4a1a)'},
@@ -420,23 +474,28 @@ $('#tbApps').addEventListener('click',e=>{const b=e.target.closest('[data-app]')
 let logT;
 $('#tabs').addEventListener('click',e=>{const el=$('#clicklog');el.textContent='You clicked the '+(e.target.closest('.caption span')?'window button':'tab')+' under the island';el.classList.add('on');clearTimeout(logT);logT=setTimeout(()=>el.classList.remove('on'),1600)});
 
-/* ---------- activities: only the newest one that isn't in the app you're using ---------- */
+/* ---------- activities: most important first; never the app you're in; flicked ones hide until they change ---------- */
 function startAct(kind,app){S.acts[kind]={app,since:Date.now()}}
 function stopAct(kind){delete S.acts[kind]}
-const FEAT_OF={media:'media',timer:'focus',download:'downloads',call:'calls'};
-function visibleAct(){
-  const c=S.acts.call;
-  if(c&&S.f.calls&&c.app!==S.fg)return {kind:'call',...c}; // a call beats everything
-  let best=null;
+const FEAT_OF={media:'media',timer:'focus',download:'downloads',call:'calls',ring:'calls',clock:'clock',xfer:'transfers'};
+const rankOf=k=>({call:0,ring:1,clock:S.clock.mode==='timer'?1:3,media:2,timer:3,download:4,xfer:4})[k];
+const sigOf=k=>k==='media'?String(S.media.idx):String(S.acts[k]?.since);
+function activities(){
+  const list=[];
   for(const [k,a] of Object.entries(S.acts)){
-    if(k==='call')continue;
     if(!S.f[FEAT_OF[k]])continue;
     if(a.app&&a.app===S.fg)continue; // you're already in that app
-    if(!best||a.since>best.since)best={kind:k,...a};
+    if(k in S.dismissed){if(S.dismissed[k]===sigOf(k))continue;delete S.dismissed[k]}
+    list.push({kind:k,...a,rank:rankOf(k)});
   }
-  if(!best&&S.pausedHere&&S.f.media&&S.media.app!==S.fg)best={kind:'media',app:S.media.app,since:0};
-  return best;
+  if(!S.acts.media&&S.pausedHere&&S.f.media&&S.media.app!==S.fg)list.push({kind:'media',app:S.media.app,since:0,rank:2});
+  list.sort((a,b)=>a.rank-b.rank||b.since-a.since);
+  const pair=list.length>=2?[list[0].kind,list[1].kind].sort().join():null;
+  if(S.pref&&pair===S.prefPair){if(list[1].kind===S.pref)[list[0],list[1]]=[list[1],list[0]]}
+  else{S.pref=null;S.prefPair=null}
+  return list;
 }
+function visibleAct(){return activities()[0]||null}
 
 /* ---------- views ---------- */
 const CV={
@@ -449,6 +508,11 @@ const CV={
   call:()=>({kind:'call-c',sig:String(S.call.muted),w:190,h:34,r:17,
     html:`<div class="row compact"><div class="ic" style="color:#30D158">${I.phone}</div><span class="lbl tnum js-calltime" style="color:#30D158">${fmt((Date.now()-S.call.since)/1000)}</span><div class="grow"></div>${S.call.muted?`<div class="ic" style="color:#FF453A">${I.micoff}</div>`:'<div class="wave"><i></i><i></i><i></i><i></i><i></i></div>'}</div>`}),
 };
+CV.clock=()=>({kind:'clock-c',sig:S.clock.mode,w:150,h:34,r:17,
+  html:`<div class="row compact"><div class="ic" style="color:${S.clock.mode==='timer'?'#FF9F0A':'#fff'}">${S.clock.mode==='timer'?I.watch:I.clock}</div><div class="grow"></div><span class="lbl tnum js-clock" style="color:${S.clock.mode==='timer'?'#FF9F0A':'#fff'}">${fmt(S.clock.t)}</span></div>`});
+CV.xfer=()=>({kind:'xfer-c',sig:'',w:150,h:34,r:17,
+  html:`<div class="row compact"><div class="ic" style="color:#0A84FF">${I.share}</div><div class="grow"></div><span class="js-xring">${ring(S.xfer.pct,19,'#0A84FF')}</span></div>`});
+CV.ring=()=>EV.ring();
 const EV={
   media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:[m.idx,m.playing,S.shuffle,S.repeat].join('|'),w:366,h:208,r:34,
     html:`<div class="row"><div class="art lg" style="background:${t.art}"></div><div class="grow"><div class="t1">${t.title}</div><div class="t2">${t.artist}</div><div class="t2" style="font-size:11px">${m.app==='chrome'?'YouTube · Chrome':'Spotify'}</div></div><button class="ib small" data-a="jump" aria-label="Open the app" style="align-self:flex-start">${I.open}</button></div>
@@ -461,9 +525,26 @@ const EV={
   timer:()=>({kind:'timer-e',sig:String(S.timer.running),w:330,h:128,r:32,
     html:`<div class="row">${ring(S.timer.left/S.timer.total*100,48)}<div class="grow"><div class="bigtime js-tleft" style="color:#FF9F0A">${fmt(S.timer.left)}</div><div class="t2">Focus · ${Math.round(S.timer.total/60)} min session</div></div></div>
     <div class="btns"><button class="pb w" data-a="tpause">${S.timer.running?'Pause':'Resume'}</button><button class="pb" data-a="t5">+5 min</button><button class="pb" data-a="tend">End</button></div>`}),
+  clock:()=>({kind:'clock-e',sig:S.clock.mode,w:300,h:96,r:32,
+    html:`<div class="row"><div class="avatar" style="background:#1c1c1e;color:${S.clock.mode==='timer'?'#FF9F0A':'#fff'};padding:11px">${S.clock.mode==='timer'?I.watch:I.clock}</div><div class="grow"><div class="bigtime js-clock" style="font-size:28px;color:${S.clock.mode==='timer'?'#FF9F0A':'#fff'}">${fmt(S.clock.t)}</div><div class="t2">${S.clock.mode==='timer'?'Timer · Windows Clock':'Stopwatch · Windows Clock'}</div></div><button class="pb sm" data-a="jump">Open Clock</button></div>`}),
+  ring:()=>({kind:'ring-e',sig:'',w:370,h:76,r:38,
+    html:`<div class="row"><div class="avatar" style="background:${APPS[S.ring.app].color};width:48px;height:48px;font-size:20px">${esc(S.ring.who[0])}</div><div class="grow"><div class="t1" style="font-size:15px">${esc(S.ring.who)}</div><div class="t2">${APPS[S.ring.app].name} · incoming call</div></div>
+    <button class="cbtn dec" data-a="decline" aria-label="Decline">${I.hang}</button><button class="cbtn ans" data-a="answer" aria-label="Answer">${I.phone}</button></div>`}),
+  xfer:()=>({kind:'xfer-e',sig:'',w:346,h:94,r:30,
+    html:`<div class="row"><div class="ic" style="color:#0A84FF;width:22px;height:22px">${I.share}</div><div class="grow"><div class="t1">${esc(S.xfer.file)}</div><div class="t2">${S.xfer.title}</div></div><span class="lbl tnum js-xpct">${Math.floor(S.xfer.pct)}%</span></div>
+    <div class="bar"><i class="js-xbar" style="width:${S.xfer.pct}%;background:#0A84FF"></i></div>`}),
   download:()=>({kind:'dl-e',sig:'',w:346,h:94,r:30,
     html:`<div class="row"><div class="ic" style="color:#0A84FF;width:22px;height:22px">${I.down}</div><div class="grow"><div class="t1">CN_Unit3_Notes.pdf</div><div class="t2 tnum js-dlmb">${(18.4*S.dl.pct/100).toFixed(1)} of 18.4 MB · Chrome</div></div><button class="pb sm" data-a="jump">Show</button></div>
     <div class="bar"><i class="js-dlbar" style="width:${S.dl.pct}%;background:#0A84FF"></i></div>`}),
+};
+const BV={
+  media:()=>`<div class="art" style="width:20px;height:20px;border-radius:50%;background:${trk().art}"></div>`,
+  call:()=>`<div class="ic" style="color:#30D158">${I.phone}</div>`,
+  ring:()=>`<div style="width:22px;height:22px;border-radius:50%;background:${APPS[S.ring.app].color};display:grid;place-items:center"><div class="ic" style="width:11px;height:11px">${I.phone}</div></div>`,
+  timer:()=>`<span class="js-bring">${ring(S.timer.left/S.timer.total*100,18)}</span>`,
+  clock:()=>`<div class="ic" style="color:${S.clock.mode==='timer'?'#FF9F0A':'#fff'}">${S.clock.mode==='timer'?I.watch:I.clock}</div>`,
+  download:()=>`<div class="ic" style="color:#0A84FF">${I.down}</div>`,
+  xfer:()=>`<span class="js-bxring">${ring(S.xfer.pct,18,'#0A84FF')}</span>`
 };
 const pill=(w,inner,kind)=>({kind,sig:inner,w,h:40,r:20,html:`<div class="row compact">${inner}</div>`});
 const card=(w,h,html,kind)=>({kind,sig:html,w,h,r:Math.min(h/2,30),html});
@@ -479,35 +560,57 @@ const TV={
   timerdone:()=>pill(260,`<div class="ic" style="color:#30D158">${I.check}</div><span class="lbl">Focus done · take 5</span>`,'timerdone'),
   buds:d=>card(330,58,`<div class="row"><div class="ic" style="width:24px;height:24px">${I.head}</div><div class="grow"><div class="lbl">${d.on?'Galaxy Buds2 Pro':'Galaxy Buds2 Pro'}</div><div class="t2">${d.on?'Connected':'Disconnected'}</div></div>${d.on?`<span class="val" style="color:#30D158;min-width:0">80%</span><div class="ic" style="color:#30D158;width:24px">${I.batt(80)}</div>`:''}</div>`,'buds'),
   privacy:d=>pill(300,`<div class="ic" style="color:${d.cam?'#30D158':'#FF9F0A'}">${d.cam?I.cam:I.mic}</div><span class="lbl">${d.cam?'Camera':'Microphone'} in use · ${d.app}</span>`,'privacy'),
+  silent:d=>({kind:'silent'+d.on,sig:'',w:196,h:36,r:18,html:`<div class="row compact" style="margin-left:-7px"><div class="silent-cap" style="background:${d.on?'#FF453A':'#3a3a3c'}"><div class="ic">${d.on?I.belloff:I.bell}</div></div><div class="grow"></div><span class="lbl" style="color:${d.on?'#FF453A':'#fff'}">${d.on?'Silent':'Ring'}</span></div>`}),
+  jarvis:d=>({kind:'jarvis',sig:d.text+d.listening,w:270,h:40,r:20,html:`<div class="row compact" style="margin-left:-5px"><div class="orb"><div class="ic">${I.mic}</div></div><span class="lbl grow">${esc(d.text)}</span>${d.listening?'<div class="jwave js-jwave"><i></i><i></i><i></i><i></i><i></i></div>':'<div class="eq on" style="--c:#BF5AF2"><i></i><i></i><i></i><i></i></div>'}</div>`}),
+  jcard:d=>{const w=Math.max(230,Math.min(392,70+Math.max(d.t.length*7.4,(d.s||'').length*6.4)+(d.yes?130:0)));
+    return card(w,d.s?58:44,`<div class="row"><div class="ic" style="color:${d.c||'#0A84FF'}">${d.i}</div><div class="grow"><div class="lbl">${esc(d.t)}</div>${d.s?`<div class="t2">${esc(d.s)}</div>`:''}</div>${d.yes?`<button class="pb sm w" data-a="${d.yes}">${d.yesL||'Yes'}</button><button class="pb sm" data-a="${d.no}">${d.noL||'No'}</button>`:''}</div>`,'jcard'+d.t)},
   msg:d=>pill(d.w||300,`<div class="ic" style="color:${d.c||'#fff'}">${d.i}</div><span class="lbl">${d.t}</span>`,'msg')
 };
 
 /* ---------- render ---------- */
 let cur={kind:null,sig:null};
 function leftFor(w){return S.pos==='left'?EDGE:S.pos==='right'?W-w-EDGE:(W-w)/2}
+const bubble=$('#bubble');
+let bubbleKind=null;
 function render(){
-  const act=visibleAct();
+  const list=activities(),act=list[0]||null;
   if(!act)S.expanded=false;
   let v=null;
   if(S.paused)v=null;
   else if(S.popup)v=TV[S.popup.kind](S.popup.data);
-  else if(act)v=(S.expanded?EV:CV)[act.kind]();
-  if(!v){island.classList.add('hidden');cur={kind:null,sig:null};placeDot(null);return}
+  else if(act)v=act.kind==='ring'?EV.ring():(S.expanded?EV:CV)[act.kind]();
+  if(!v){island.classList.add('hidden');cur={kind:null,sig:null};placeDot(null);placeBubble(null);return}
+  const wasHidden=island.classList.contains('hidden');
   island.classList.remove('hidden');
   island.style.width=v.w+'px';island.style.height=v.h+'px';island.style.borderRadius=v.r+'px';
   if(!drag||!drag.moved)island.style.left=leftFor(v.w)+'px';
-  if(v.kind!==cur.kind){content.innerHTML=v.html;content.classList.remove('fade');void content.offsetWidth;content.classList.add('fade')}
+  if(v.kind!==cur.kind){content.innerHTML=v.html;content.classList.remove('fade');void content.offsetWidth;content.classList.add('fade');
+    if(!wasHidden&&cur.kind){island.classList.remove('morph');void island.offsetWidth;island.classList.add('morph')}} // liquid morph
   else if(v.sig!==cur.sig)content.innerHTML=v.html;
   cur={kind:v.kind,sig:v.sig};
-  placeDot(v.w);patch();updateGhost();
+  const second=!S.popup&&!S.paused&&!S.expanded&&act&&act.kind!=='ring'?list[1]:null;
+  placeBubble(second?second.kind:null,v.w);
+  placeDot(v.w,second?40:0);patch();updateGhost();
 }
-function placeDot(w){
+function placeBubble(kind,w){
+  if(!kind){bubble.classList.add('hidden');bubbleKind=null;return}
+  const l=leftFor(w);const x=S.pos==='right'?l-40:l+w+6;
+  if(bubble.classList.contains('hidden')){ // buds off the island's edge
+    bubble.style.transition='none';bubble.style.left=(S.pos==='right'?x+24:x-24)+'px';void bubble.offsetWidth;bubble.style.transition='';
+  }
+  if(kind!==bubbleKind)bubble.innerHTML=BV[kind]();
+  bubbleKind=kind;bubble.classList.remove('hidden');bubble.style.left=x+'px';
+}
+bubble.addEventListener('pointerdown',()=>bubble.classList.add('pressed'));
+['pointerup','pointerleave','pointercancel'].forEach(t=>bubble.addEventListener(t,()=>bubble.classList.remove('pressed')));
+bubble.addEventListener('click',()=>{const a=visibleAct();if(!a||!bubbleKind)return;S.pref=bubbleKind;S.prefPair=[a.kind,bubbleKind].sort().join();S.expanded=false;render()});
+function placeDot(w,extra=0){
   const on=S.f.calls&&S.cam;
   pdot.className='pdot cam'+(on?' on':'');
   if(!on)return;
   const hidden=w==null;const l=hidden?leftFor(9):leftFor(w);
   pdot.style.top=hidden?'14px':'20px';
-  pdot.style.left=(hidden?l:(S.pos==='right'?l-17:l+w+8))+'px';
+  pdot.style.left=(hidden?l:(S.pos==='right'?l-17-extra:l+w+8+extra))+'px';
 }
 function patch(){
   const m=S.media,t=trk();
@@ -518,9 +621,13 @@ function patch(){
   stage.querySelectorAll('.js-calltime').forEach(e=>e.textContent=fmt((Date.now()-S.call.since)/1000));
   stage.querySelectorAll('.js-callsub').forEach(e=>e.textContent=APPS[S.call.app].name+' · '+fmt((Date.now()-S.call.since)/1000));
   stage.querySelectorAll('.js-tleft').forEach(e=>e.textContent=fmt(S.timer.left));
-  stage.querySelectorAll('.js-ring').forEach(e=>e.style.strokeDashoffset=100-S.timer.left/S.timer.total*100);
+  stage.querySelectorAll('.js-ring').forEach(e=>{if(!e.closest('.js-xring,.js-bxring'))e.style.strokeDashoffset=100-S.timer.left/S.timer.total*100});
   stage.querySelectorAll('.js-dlpct').forEach(e=>e.textContent=Math.floor(S.dl.pct)+'%');
   stage.querySelectorAll('.js-dlbar').forEach(e=>e.style.width=S.dl.pct+'%');
+  stage.querySelectorAll('.js-clock').forEach(e=>e.textContent=fmt(S.clock.t));
+  stage.querySelectorAll('.js-xpct').forEach(e=>e.textContent=Math.floor(S.xfer.pct)+'%');
+  stage.querySelectorAll('.js-xbar').forEach(e=>e.style.width=S.xfer.pct+'%');
+  stage.querySelectorAll('.js-xring .js-ring,.js-bxring .js-ring').forEach(e=>e.style.strokeDashoffset=100-S.xfer.pct);
   stage.querySelectorAll('.js-dlmb').forEach(e=>e.textContent=(18.4*S.dl.pct/100).toFixed(1)+' of 18.4 MB · Chrome');
 }
 
@@ -551,7 +658,9 @@ island.addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(b){e.stopPropagation();act(b.dataset.a,b);return}
   if(dragMoved||e.target.closest('[data-slider]'))return;
   if(S.popup){endPop();return}
-  if(visibleAct()){S.expanded=!S.expanded;render()}
+  const a=visibleAct();if(!a)return;
+  if(a.kind==='ring'){jumpTo(a.app);return}
+  S.expanded=!S.expanded;render();
 });
 island.addEventListener('contextmenu',e=>{
   e.preventDefault();if(S.popup){endPop();return}
@@ -572,16 +681,29 @@ island.addEventListener('pointerdown',e=>{
   const sl=e.target.closest('[data-slider]');
   if(sl){slide={el:sl,kind:sl.dataset.slider};sl.setPointerCapture(e.pointerId);slideTo(e);
     sl.onpointermove=ev=>{if(slide)slideTo(ev)};sl.onpointerup=()=>{slide=null};return}
-  dragMoved=false;drag={x:e.clientX,start:parseFloat(island.style.left)||0,moved:false};island.setPointerCapture(e.pointerId);
+  dragMoved=false;drag={x:e.clientX,y:e.clientY,start:parseFloat(island.style.left)||0,moved:false};island.setPointerCapture(e.pointerId);
+  island.classList.add('pressed'); // press squish
 });
 island.addEventListener('pointermove',e=>{
-  if(!drag)return;const dx=(e.clientX-drag.x)/scale;
+  if(!drag)return;const dx=(e.clientX-drag.x)/scale,dy=(e.clientY-drag.y)/scale;
+  if(!drag.moved&&dy<-12&&-dy>Math.abs(dx)){flick();return} // flick up to dismiss
   if(!drag.moved){if(Math.abs(dx)<6)return;drag.moved=dragMoved=true;island.classList.add('dragging');stage.classList.add('show-zones')}
   const w=island.offsetWidth;const l=Math.max(6,Math.min(W-w-6,drag.start+dx));island.style.left=l+'px';
   const z=zoneFor(l+w/2);stage.querySelectorAll('.zone').forEach(el=>el.classList.toggle('hot',el.dataset.z===z));
 });
 function zoneFor(cx){return cx<W/3?'left':cx>W*2/3?'right':'center'}
-function endDrag(){if(!drag)return;const d=drag;drag=null;island.classList.remove('dragging');stage.classList.remove('show-zones');
+function flick(){
+  drag=null;dragMoved=true;island.classList.remove('pressed');island.classList.add('flick');placeBubble(null);
+  setTimeout(()=>{
+    island.classList.add('instant');island.classList.remove('flick');island.classList.add('hidden');void island.offsetWidth;island.classList.remove('instant');
+    cur={kind:null,sig:null};
+    if(S.popup)endPop();
+    else{const a=visibleAct();if(a){S.dismissed[a.kind]=sigOf(a.kind);S.expanded=false}
+      requestAnimationFrame(()=>render())}
+    setTimeout(()=>dragMoved=false,50);
+  },200);
+}
+function endDrag(){island.classList.remove('pressed');if(!drag)return;const d=drag;drag=null;island.classList.remove('dragging');stage.classList.remove('show-zones');
   if(d.moved)setPos(zoneFor((parseFloat(island.style.left)||0)+island.offsetWidth/2));}
 island.addEventListener('pointerup',endDrag);island.addEventListener('pointercancel',endDrag);
 
@@ -602,6 +724,11 @@ function act(a,el){
     case 'tend':stopAct('timer');S.expanded=false;break;
     case 'jump':{const a2=visibleAct();if(a2&&a2.app)jumpTo(a2.app);return}
     case 'saver':pop('saver',null,2000);return;
+    case 'answer':answer();return;
+    case 'decline':stopAct('ring');pop('msg',{i:I.hang,c:'#FF453A',t:'Declined · '+S.ring.who,w:220},1800);return;
+    case 'jv-yes':jConfirm(true);return;
+    case 'jv-no':jConfirm(false);return;
+    case 'jv-get':jDownload();return;
     case 'dismiss':endPop();return;
   }
   render();
@@ -625,10 +752,21 @@ function trig(a){
     case 'cam':S.cam=S.cam?null:'Google Meet';if(S.cam&&S.f.calls)pop('privacy',{app:'Google Meet',cam:1},2200);else render();return;
     case 'deadline':{if(!S.f.deadlines)return;const d=[...S.deadlines].sort((a,b)=>a.due-b.due)[0];if(!d)return;pop('deadline',{t:`${d.title} ${d.cal?'in':'due in'} ${human(d.due-Date.now())}`,s:whenText(d.due)},5000);return}
     case 'focus':startFocus();break;
+    case 'mutekey':S.muted=!S.muted;if(S.f.volume)pop('silent',{on:S.muted},1800);return;
+    case 'ring':ringNow();break;
+    case 'answer':answer();return;
+    case 'clocktimer':if(!S.f.clock)return;S.clock={mode:'timer',t:300};startAct('clock','clock');break;
+    case 'stopwatch':if(!S.f.clock)return;S.clock={mode:'stopwatch',t:0};startAct('clock','clock');break;
+    case 'clockstop':stopAct('clock');S.expanded=false;break;
+    case 'btsend':if(!S.f.transfers)return;S.xfer={title:'Sending · Bluetooth',file:'Resume_Imran.pdf',pct:0};startAct('xfer',null);break;
+    case 'nsrecv':if(!S.f.transfers)return;S.xfer={title:'Receiving · Nearby Share',file:'IMG_2041.jpg',pct:0};startAct('xfer',null);break;
   }
   render();renderCC();
 }
 let clipI=0;
+function answer(){if(!S.acts.ring)return;stopAct('ring');S.call={app:S.ring.app,who:S.ring.who,since:Date.now(),muted:false};startAct('call',S.ring.app);render()}
+function ringNow(){if(!S.f.calls)return;S.ring={app:'whatsapp',who:'Amma'};startAct('ring','whatsapp');const since=S.acts.ring.since;
+  setTimeout(()=>{if(S.acts.ring&&S.acts.ring.since===since){stopAct('ring');pop('msg',{i:I.phone,c:'#FF453A',t:'Missed call · Amma',w:220},3000)}},25000)}
 function startFocus(){if(!S.f.focus)return;S.timer={left:S.focusMin*60,total:S.focusMin*60,running:true};startAct('timer',null)}
 
 /* ---------- clocks ---------- */
@@ -636,10 +774,13 @@ setInterval(()=>{
   const m=S.media;
   if(S.acts.media&&m.playing){m.t++;if(m.t>=trk().dur){m.idx=(m.idx+1)%3;m.t=0;render()}}
   if(S.acts.timer&&S.timer.running){S.timer.left--;if(S.timer.left<=0){stopAct('timer');pop('timerdone',null,4000);return}}
+  if(S.acts.clock){if(S.clock.mode==='timer'){S.clock.t--;if(S.clock.t<=0){stopAct('clock');pop('msg',{i:I.watch,c:'#FF9F0A',t:'Clock timer done',w:220},5000);return}}else S.clock.t++}
   patch();
 },1000);
 setInterval(()=>{if(!S.acts.download)return;S.dl.pct=Math.min(100,S.dl.pct+1.4);if(S.dl.pct>=100){stopAct('download');S.expanded=false;pop('dldone',null,4000);return}patch()},120);
 setInterval(()=>{if(ccOpen)renderDeadlines()},30000);
+setInterval(()=>{if(!S.acts.xfer)return;S.xfer.pct=Math.min(100,S.xfer.pct+0.9);if(S.xfer.pct>=100){const t=S.xfer.title;stopAct('xfer');S.expanded=false;
+  pop('jcard',{i:I.check,c:'#30D158',t:(t.startsWith('Rec')?'Received':'Sent')+t.slice(t.indexOf(' ·')),s:S.xfer.file},4000);return}patch()},120);
 
 /* ---------- Control Center ---------- */
 let ccOpen=false;
@@ -649,12 +790,15 @@ const TILES=[
   ['battery','Battery',I.bolt,'#30D158'],['downloads','Downloads',I.down,'#0A84FF'],
   ['clipboard','Clipboard',I.clip,'#5E5CE6'],['earbuds','Earbuds',I.head,'#64D2FF'],
   ['calls','Calls & camera',I.phone,'#30D158'],['deadlines','Deadlines',I.cal,'#FF453A'],
+  ['clock','Windows Clock',I.watch,'#FF9F0A'],['transfers','File transfers',I.share,'#0A84FF'],
   ['focus','Focus timer',I.moon,'#BF5AF2']
 ];
 const OPTS=[
   ['replaceVol','Replace the Windows volume pop-up','Only the island shows when you press volume keys'],
   ['showClip','Show copied text','Off: just says "Copied". Passwords are never shown'],
   ['fullscreen','Hide in full-screen','Games and videos stay clean. Volume still shows'],
+  ['wake','Listen for “Jarvis”','Say “Jarvis, open Spotify” without pressing anything. Keeps the mic on; paused during calls'],
+  ['jsounds','Jarvis sounds','A soft chime when it listens and when it\'s done'],
   ['startup','Start with Windows','']
 ];
 function renderCC(){
@@ -664,6 +808,12 @@ function renderCC(){
   cc.innerHTML=`
   <div class="cc-head"><img src="${ICON}" alt=""><div><div class="t">DyIsd</div><div class="s">Click the island to open it · right-click to jump to the app</div></div>
     <button class="ib cc-x" data-cc="close" aria-label="Close">${I.x}</button></div>
+
+  <div class="jv-card" style="margin-bottom:8px">
+    <div class="orb lg"><div class="ic">${I.mic}</div></div>
+    <div><div class="lbl">Jarvis</div><div class="t2" style="white-space:normal">${S.jarvis.dl>=0?'Downloading its ears (470 MB, one time)…':!S.jarvis.ready?'Voice control, no AI, nothing leaves this laptop. Needs a one-time 470 MB download.':S.jarvis.on?(S.opt.wake?'Hold Ctrl + Space and talk, or say “Jarvis…”':'Hold Ctrl + Space and talk')+' · on your graphics card':'Off. Ctrl + Space types a space like normal.'}</div></div>
+    <button class="pb ${S.jarvis.on||!S.jarvis.ready?'w':''}" data-cc="jarvis" ${S.jarvis.dl>=0?'disabled':''}>${S.jarvis.dl>=0?Math.round(S.jarvis.dl)+'%':!S.jarvis.ready?'Get it':S.jarvis.on?'Turn off':'Turn on'}</button>
+  </div>
 
   <div class="focus-tile">
     <div class="fi">${I.moon}</div>
@@ -777,7 +927,7 @@ function draftDue(){if(!draft.day||!draft.time)return null;const [h,m]=draft.tim
 
 cc.addEventListener('click',e=>{
   const tile=e.target.closest('[data-tile]');if(tile){const k=tile.dataset.tile;S.f[k]=!S.f[k];
-    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='calls')stopAct('call');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
+    if(!S.f[k]){if(k==='media')stopAct('media');if(k==='calls'){stopAct('call');stopAct('ring')}if(k==='clock')stopAct('clock');if(k==='transfers')stopAct('xfer');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
     save();renderCC();render();return}
   const p=e.target.closest('[data-pos]');if(p){setPos(p.dataset.pos);return}
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
@@ -785,6 +935,7 @@ cc.addEventListener('click',e=>{
   const c=e.target.closest('[data-cc]');if(!c)return;
   switch(c.dataset.cc){
     case 'close':toggleCC(false);break;
+    case 'jarvis':if(!S.jarvis.ready)jDownload();else{S.jarvis.on=!S.jarvis.on;renderCC()}break;
     case 'focus':if(S.acts.timer)stopAct('timer');else startFocus();render();renderCC();break;
     case 'cal':if(S.cal.connected){S.cal.connected=false;S.deadlines=S.deadlines.filter(d=>!d.cal)}else{S.cal.connected=true;pop('msg',{i:I.link,c:'#30D158',t:'Calendar connected · 14 events',w:290},2000)}renderCC();break;
     case 'pause':S.paused=!S.paused;renderCC();render();break;
@@ -805,10 +956,12 @@ function setPos(p){S.pos=p;stage.dataset.pos=p;save();render();if(ccOpen){placeC
 /* ---------- event simulator ---------- */
 const EVENTS=[
   ['Music',[['spotify','Play in Spotify'],['youtube','YouTube in Chrome'],['pausemusic','Pause'],['stopmusic','Stop']]],
-  ['Volume & brightness',[['vol-','Vol −'],['vol+','Vol +'],['bri-','Bright −'],['bri+','Bright +']]],
+  ['Volume & brightness',[['vol-','Vol −'],['vol+','Vol +'],['mutekey','Mute key (silent switch)'],['bri-','Bright −'],['bri+','Bright +']]],
   ['Battery',[['charge','Plug in'],['lowbat','Battery low']]],
   ['Earbuds',[['budson','Connect'],['budsoff','Disconnect']]],
-  ['Calls',[['wacall','WhatsApp call'],['dcall','Discord voice'],['dmute','Press Discord mute key'],['endcall','End call']]],
+  ['Calls',[['ring','WhatsApp rings'],['wacall','WhatsApp call'],['dcall','Discord voice'],['dmute','Press Discord mute key'],['endcall','End call']]],
+  ['Windows Clock',[['clocktimer','Timer 5:00'],['stopwatch','Stopwatch'],['clockstop','Stop']]],
+  ['File transfers',[['btsend','Bluetooth send'],['nsrecv','Nearby Share receive']]],
   ['Camera',[['cam','Meet camera on/off']]],
   ['Everything else',[['clip','Copy a link'],['download','Download a PDF'],['deadline','Deadline reminder'],['focus','Start focus']]]
 ];
@@ -817,10 +970,162 @@ $('#events').addEventListener('click',e=>{const b=e.target.closest('[data-t]');i
 
 let demoT=[];
 $('#demoBtn').addEventListener('click',()=>{
-  demoT.forEach(clearTimeout);demoT=[];S.acts={};S.popup=null;S.cam=null;S.pausedHere=false;S.fg='word';renderDesktop();render();
-  [[300,'spotify'],[3500,'vol+'],[4000,'vol+'],[7000,'budson'],[11000,'wacall'],[16000,'dmute'],[20000,'dmute'],[23000,'endcall'],[27000,'pausemusic']]
-    .forEach(([t,a])=>demoT.push(setTimeout(()=>trig(a),t)));
+  demoT.forEach(clearTimeout);demoT=[];S.acts={};S.popup=null;S.cam=null;S.pausedHere=false;S.fg='word';S.dismissed={};S.pref=null;S.jarvis.ready=true;renderDesktop();render();
+  [[300,'spotify'],[3000,'clocktimer'],[6500,'mutekey'],[8500,'mutekey'],[11000,'ring'],[14500,'answer'],[18000,'dmute'],[21000,'dmute'],[23000,'endcall'],[25000,'jv:volume 30'],[29500,'clockstop'],[31000,'pausemusic']]
+    .forEach(([t,a])=>demoT.push(setTimeout(()=>a.startsWith('jv:')?jarvisSay(a.slice(3),true):trig(a),t)));
 });
+
+/* ---------- Jarvis: the same phrasings as the real app (a smaller set), acted out on this fake desktop ---------- */
+let actx=null;
+function tone(notes){if(!S.opt.jsounds)return;try{actx=actx||new AudioContext();let t=actx.currentTime;
+  notes.forEach(([hz,ms])=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=hz;o.connect(g);g.connect(actx.destination);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.12,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+ms/1000);o.start(t);o.stop(t+ms/1000);t+=ms/1000})}catch(e){}}
+const chime={listen:()=>tone([[880,70],[1320,90]]),done:()=>tone([[1046.5,90],[1568,160]]),error:()=>tone([[330,110],[247,160]])};
+let jT=null,waveT=null;
+function jListening(text){clearTimeout(jT);pop('jarvis',{text,listening:true},60000);clearInterval(waveT);
+  waveT=setInterval(()=>stage.querySelectorAll('.js-jwave i').forEach(i=>i.style.height=(20+Math.random()*80)+'%'),90)}
+function jThinking(){clearInterval(waveT);pop('jarvis',{text:'Got it…',listening:false},60000)}
+function jReply(r,heard){clearInterval(waveT);
+  if(r.silent){chime.done();return}
+  pop('jcard',{i:r.i||I.check,c:r.c||'#0A84FF',t:r.t,s:heard?`“${heard}”`:null,yes:r.yes,no:r.no,yesL:r.yesL,noL:r.noL},r.yes?10000:r.fail?5000:3600);
+  (r.fail?chime.error:r.yes?chime.listen:chime.done)()}
+
+const SITES={youtube:'YouTube',gmail:'Gmail',github:'GitHub',google:'Google',leetcode:'LeetCode',linkedin:'LinkedIn',instagram:'Instagram',netflix:'Netflix',
+  amazon:'Amazon',flipkart:'Flipkart',chatgpt:'ChatGPT','srm academia':'SRM Academia',classroom:'Google Classroom',drive:'Google Drive',maps:'Google Maps'};
+const SEARCH={youtube:'YouTube',amazon:'Amazon',flipkart:'Flipkart',wikipedia:'Wikipedia',github:'GitHub',maps:'Google Maps',reddit:'Reddit','stack overflow':'Stack Overflow',leetcode:'LeetCode',spotify:'Spotify',google:'Google'};
+const NUMW={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,fifteen:15,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90,hundred:100,a:1,an:1};
+const num=t=>{if(t==null)return null;const m=String(t).match(/\d+/);if(m)return +m[0];let n=0,any=false;for(const w of String(t).split(/\s+/)){if(w in NUMW){n+=NUMW[w];any=true}}return any?n:null};
+const KEYS={'new tab':'New tab','close tab':'Closed tab','close this tab':'Closed tab','reopen tab':'Reopened tab','reopen the last tab':'Reopened tab','next tab':'Next tab','previous tab':'Previous tab',
+  'copy':'Copied','copy that':'Copied','paste':'Pasted','undo':'Undo','redo':'Redo','select all':'Selected all','save':'Saved','refresh':'Refreshed','reload':'Refreshed','go back':'Back',
+  'zoom in':'Zoom in','zoom out':'Zoom out','full screen':'Full screen','take a screenshot':'Screenshot','screenshot':'Screenshot','show desktop':'Desktop','minimize everything':'Desktop',
+  'press enter':'Enter','enter':'Enter','send it':'Enter','emoji':'Emoji','clipboard history':'Clipboard','task manager':'Task Manager','file explorer':'File Explorer','notifications':'Notifications',
+  'snap left':'Snapped left','snap right':'Snapped right','switch window':'Switched','task view':'Task view','incognito':'Incognito','new window':'New window','bookmark this':'Bookmarked','find':'Find'};
+const VERBS='open|launch|start|close|quit|search|google|look|find|type|write|press|hit|scroll|play|pause|resume|skip|go|switch|minimi[sz]e|maximi[sz]e|mute|unmute|set|turn|take|lock|show|hide|copy|paste|undo|redo|select|save|refresh|zoom|remind|answer|decline|new';
+function jSplit(t){
+  t=t.trim().replace(/^(?:(?:hey|ok|okay)\W+)?jarvis\W*/i,'');
+  const parts=[];let rest=t;
+  while(rest){
+    const ty=rest.match(/^\s*(?:type|write)\s+/i);
+    if(ty){const tail=rest.match(/[\s,]*(?:and\s+)?(?:press|hit)\s+enter\.?\s*$/i);if(tail){parts.push(rest.slice(0,tail.index));parts.push('press enter')}else parts.push(rest);break}
+    const re=new RegExp(`(?:\\s*,\\s*(?:and\\s+|then\\s+)?|\\s+(?:and\\s+then|and|then)\\s+)(?=(?:${VERBS})\\b)`,'i');
+    const m=rest.slice(1).match(re);if(!m){parts.push(rest);break}
+    parts.push(rest.slice(0,m.index+1));rest=rest.slice(m.index+1+m[0].length);
+  }
+  return parts.map(p=>p.trim().replace(/[.!]+$/,'')).filter(Boolean);
+}
+function jOne(orig){
+  const ty=orig.match(/^\s*(?:type|write)\s+(.+)$/i);if(ty)return{i:I.key,t:`Typed “${ty[1].replace(/\.$/,'')}”`};
+  let t=orig.toLowerCase().replace(/[’']/g,'').replace(/%/g,' percent').replace(/[?!,]/g,'').replace(/\bwhat is\b/g,'whats').replace(/\bwi-?fi\b/g,'wifi').replace(/^(?:please|can you|could you|just)\s+/,'').replace(/\s+(?:please|for me|now)$/,'').trim();
+  let m;
+  if(KEYS[t])return{i:I.key,t:KEYS[t]};
+  if(m=t.match(/^(?:go to |switch to )?(?:tab (\w+)|(\w+) tab)$/)){const n=num(m[1]||m[2])||({first:1,second:2,third:3,fourth:4,fifth:5,last:9})[m[1]||m[2]];if(n)return{i:I.key,t:'Tab '+n}}
+  if(/^(thank you|thanks)/.test(t))return{i:I.check,c:'#30D158',t:'Anytime, Imran'};
+  if(/^(hi|hello|hey)( jarvis)?$/.test(t))return{i:I.mic,c:'#30D158',t:'Hey Imran. What do you need?'};
+  if(/^(help|what can you do)/.test(t))return{i:I.mic,t:'Try “open chrome”, “volume 40”, “type hello”'};
+  if(/^(never ?mind|cancel|forget it|no)$/.test(t))return{silent:true};
+  if(/^(yes|yeah|sure|do it|confirm|ok|okay)$/.test(t))return{i:I.check,t:'Nothing to confirm'};
+  if(/^(answer|pick up|accept)( the| it)?( call)?$/.test(t)){if(!S.acts.ring)return{fail:1,i:I.phone,c:'#FF9F0A',t:'No call is ringing'};answer();return{i:I.phone,c:'#30D158',t:'Answered'}}
+  if(/^(decline|reject)( the| it)?( call)?$/.test(t)){if(!S.acts.ring)return{fail:1,i:I.phone,c:'#FF9F0A',t:'No call is ringing'};stopAct('ring');return{i:I.hang,c:'#FF453A',t:'Declined'}}
+  if(/^(mute|unmute) (me|my mic|the mic|mic|microphone)$/.test(t)){const mu=t.startsWith('mute');if(S.acts.call)S.call.muted=mu;render();return{i:mu?I.micoff:I.mic,c:mu?'#FF453A':'#30D158',t:mu?'Mic muted':'Mic on'}}
+  if(m=t.match(/^remind me (?:to )?(.+?) (?:at (\d{1,2})(?::(\d\d))? ?(am|pm)?|in (\w+) (minutes?|hours?))( tomorrow)?$/)){
+    const d=new Date();if(m[5]){const n=num(m[5])||1;d.setTime(Date.now()+n*(m[6].startsWith('h')?HR:MIN))}else{let h=+m[2];if(m[4]==='pm'&&h<12)h+=12;if(!m[4]&&h<=7)h+=12;d.setHours(h,+(m[3]||0),0,0);if(m[7])d.setDate(d.getDate()+1);else if(d<=new Date())d.setDate(d.getDate()+1)}
+    const i0=orig.toLowerCase().indexOf(m[1]);const raw=i0>=0?orig.substr(i0,m[1].length):m[1];
+    const title=raw[0].toUpperCase()+raw.slice(1);S.deadlines.push({id:Date.now(),title,due:d.getTime(),cal:false,rep:'none'});renderCC();
+    return{i:I.cal,c:'#30D158',t:`Reminder: ${title} · ${whenText(d.getTime())}`}}
+  if(/^remind me/.test(t))return{fail:1,i:I.cal,c:'#FF9F0A',t:'When? Try “remind me to study at 7 pm”'};
+  if(m=t.match(/^(?:set |start )?(?:a )?(?:timer|countdown) (?:for )?(\w+(?: \w+)?) (minutes?|mins?|seconds?|secs?)$/)||t.match(/^(?:set |start )?(?:a |an )?(\w+) (minute|second) timer$/)){
+    const n=num(m[1])||1,secs=m[2].startsWith('s')?n:n*60;S.timer={left:secs,total:secs,running:true};startAct('timer',null);render();return{i:I.watch,c:'#30D158',t:`Timer · ${secs>=60?Math.round(secs/60)+' min':secs+' s'}`}}
+  if(/^(start )?focus/.test(t)){startFocus();render();return{i:I.moon,c:'#30D158',t:`Focus · ${S.focusMin} min`}}
+  if(/^(stop|end|cancel) (the )?(timer|focus)/.test(t)){if(!S.acts.timer)return{i:I.watch,t:'No timer running'};stopAct('timer');render();return{i:I.watch,t:'Timer stopped'}}
+  if(m=t.match(/^(?:set |change |turn )?(?:the )?volume (?:to |at )?(\w+(?: \w+)?)(?: percent)?$/)){const n=num(m[1]);if(n!=null){S.vol=Math.min(100,n);pop('volume',null,1600);return{silent:true}}}
+  if(/^(volume up|louder|turn (it|the volume) up)/.test(t)){S.vol=Math.min(100,S.vol+10);pop('volume',null,1600);return{silent:true}}
+  if(/^(volume down|quieter|softer|turn (it|the volume) down)/.test(t)){S.vol=Math.max(0,S.vol-10);pop('volume',null,1600);return{silent:true}}
+  if(/^(mute|silence|silent mode)( the)?( volume| sound| everything)?$/.test(t)){S.muted=true;pop('silent',{on:true},1800);return{silent:true}}
+  if(/^unmute( the)?( volume| sound)?$/.test(t)){S.muted=false;pop('silent',{on:false},1800);return{silent:true}}
+  if(m=t.match(/^(?:set )?(?:the )?brightness (?:to )?(\w+)(?: percent)?$/)){const n=num(m[1]);if(n!=null){S.bri=Math.min(100,n);pop('brightness',null,1600);return{silent:true}}}
+  if(/^(brighter|brightness up)/.test(t)){S.bri=Math.min(100,S.bri+15);pop('brightness',null,1600);return{silent:true}}
+  if(/^(dimmer|brightness down|dim the screen)/.test(t)){S.bri=Math.max(0,S.bri-15);pop('brightness',null,1600);return{silent:true}}
+  if(/^(play|resume|continue)( the)?( music| song| it)?$/.test(t)){trig('spotify');return{silent:true}}
+  if(/^(pause|stop)( the)?( music| song| it| video)?$/.test(t)){trig('pausemusic');return{silent:true}}
+  if(/^(next|skip)( song| track| this)?$/.test(t)){S.media.idx=(S.media.idx+1)%TRACKS.length;S.media.t=0;render();return{silent:true}}
+  if(/^(previous|last song|go back a song)( song| track)?$/.test(t)){S.media.idx=(S.media.idx+2)%TRACKS.length;S.media.t=0;render();return{silent:true}}
+  if(/^(whats playing|what song is this|whats this song)$/.test(t))return S.acts.media||S.pausedHere?{i:I.music,t:`${trk().title} · ${trk().artist}`}:{i:I.music,t:'Nothing is playing'};
+  if(m=t.match(/^play (.+?)(?: on youtube)?$/))return{i:I.globe,t:`YouTube · ${m[1]}`};
+  if(m=t.match(/^(?:search|look up|find) (?:for )?(.+?) (?:on|in) (youtube|amazon|flipkart|wikipedia|github|maps|reddit|stack overflow|leetcode|spotify|google)$/)||t.match(/^(?:search) (youtube|amazon|flipkart|wikipedia|github|reddit|leetcode|spotify) for (.+)$/)){
+    const [q,site]=SEARCH[m[2]]?[m[1],m[2]]:[m[2],m[1]];return{i:I.globe,t:`${SEARCH[site]} · ${q}`}}
+  if(m=t.match(/^(?:search|google|look up)(?: for)? (.+)$/))return{i:I.globe,t:`Google · ${m[1]}`};
+  if(/^(whats the time|what time is it|time)$/.test(t))return{i:I.clock,t:"It's "+new Date().toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'}).toUpperCase()};
+  if(/^(whats the date|whats todays date|what day is it|date)( today)?$/.test(t))return{i:I.cal,t:new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})};
+  if(/battery/.test(t))return{i:I.bolt,c:'#30D158',t:'Battery 64% · charging'};
+  if(m=t.match(/^(?:whats |calculate )?([\d\s.]+(?:plus|minus|times|x|divided by|into|over|percent of)[\d\s.]+)$/)){
+    const e=m[1].replace(/(\d+(?:\.\d+)?)\s*percent of/,'$1*0.01*').replace(/plus/g,'+').replace(/minus/g,'-').replace(/times|x|into/g,'*').replace(/divided by|over/g,'/');
+    if(/^[\d\s.+\-*/]+$/.test(e)){const v=Function('return ('+e+')')();return{i:I.check,t:`${m[1]} = ${+v.toFixed(4)}`}}}
+  if(/^(shut ?down|turn off)( the| my)?( laptop| computer| pc)?$/.test(t))return{i:I.power,c:'#FF453A',t:'Shut down the laptop?',yes:'jv-yes',no:'jv-no',confirm:'Shutting down (not really, it\'s a prototype)'};
+  if(/^(restart|reboot)( the| my)?( laptop| computer| pc)?$/.test(t))return{i:I.power,c:'#FF9F0A',t:'Restart the laptop?',yes:'jv-yes',no:'jv-no',confirm:'Restarting (pretend)'};
+  if(/^empty (the )?recycle bin$/.test(t))return{i:I.x,c:'#FF9F0A',t:'Empty the Recycle Bin?',yes:'jv-yes',no:'jv-no',confirm:'Recycle Bin emptied'};
+  if(/^lock( the)?( computer| laptop| pc| screen)?$/.test(t))return{i:I.power,t:'Locked (pretend)'};
+  if(m=t.match(/^(?:turn |switch )?(on|off) (wifi|bluetooth)$/)||t.match(/^(?:turn |switch )?(wifi|bluetooth) (on|off)$/)){const [st,r]=m[1]==='on'||m[1]==='off'?[m[1],m[2]]:[m[2],m[1]];return{i:I.link,t:`${r==='wifi'?'Wi-Fi':'Bluetooth'} ${st}`}}
+  if(m=t.match(/^(dark|light) mode$/))return{i:I.moon,t:m[1][0].toUpperCase()+m[1].slice(1)+' mode'};
+  if(m=t.match(/^scroll (up|down)/))return{i:I.key,t:'Scrolled '+m[1]};
+  if(/^(hide|minimi[sz]e) (the )?island$/.test(t)){setTimeout(()=>{S.paused=true;render();renderCC()},1800);return{i:I.eye,t:'Hiding the island. Tray icon brings it back.'}}
+  if(m=t.match(/^move (?:the )?island (?:to (?:the )?)?(left|right|center)$/)){setPos(m[1]);return{i:I.eye,t:'Moved '+m[1]}}
+  if(m=t.match(/^close (.+)$/)){const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===m[1]);return k?{i:I.x,t:'Closed '+APPS[k].name}:{fail:1,i:I.x,c:'#FF9F0A',t:`“${m[1]}” isn't open`}}
+  if(/^(message|text|send) /.test(t)||/ on whatsapp$/.test(t))return{fail:1,i:I.clock,c:'#BF5AF2',t:'WhatsApp messages come in the next Jarvis update'};
+  if(/^ask claude/.test(t))return{fail:1,i:I.clock,c:'#BF5AF2',t:'Claude sessions come in the next Jarvis update'};
+  m=t.match(/^(?:open|launch|start|switch to|go to) (?:the )?(.+?)(?: app)?$/)||t.match(/^(\w+(?: \w+)?)$/);
+  if(m){const name=m[1].replace(/^vs code$/,'vs code');const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===name||k===name.replace(/\s/g,''));
+    if(k){jumpTo(k);return{i:I.open,t:APPS[k].name}}
+    if(SITES[name])return{i:I.globe,t:SITES[name]};
+    if(/^[\w-]+\.(com|in|org|io|dev|ai)$/.test(name))return{i:I.globe,t:name};
+    if(/^(open|launch|start)/.test(t))return{fail:1,i:I.x,c:'#FF9F0A',t:`No app called “${name}”`};}
+  if(/^(what|who|how|why|when|where|which) /.test(t))return{i:I.globe,t:'Google · '+orig};
+  return{fail:1,i:I.mic,c:'#FF9F0A',t:`Didn't catch a command in “${orig}”`};
+}
+function jarvisSay(text,instant){
+  if(!S.jarvis.on)return;
+  if(!S.jarvis.ready){pop('jcard',{i:I.mic,t:'Jarvis needs a one-time download',s:'Speech model · 470 MB · runs on this laptop',yes:'jv-get',no:'dismiss',yesL:'Download',noL:'Later'},12000);return}
+  const run=()=>{jThinking();setTimeout(()=>{
+    const p=S.jarvis.pending;S.jarvis.pending=null;
+    const lower=text.toLowerCase().replace(/[.!]/g,'').trim();
+    if(p&&/^(yes|yeah|sure|do it|confirm)$/.test(lower)){jReply({i:I.check,c:'#30D158',t:p},text);return}
+    if(p&&/^(no|cancel|never ?mind)$/.test(lower)){jReply({i:I.x,t:'Cancelled'},text);return}
+    const parts=jSplit(text);let last=null;const labels=[];
+    for(const part of parts){const r=jOne(part);last=r;if(r.fail||r.yes)break;if(!r.silent)labels.push(r.t)}
+    if(last.yes)S.jarvis.pending=last.confirm;
+    if(!last.fail&&!last.yes&&labels.length>1)last={...last,t:labels.slice(-3).join(' · ')};
+    if(last.silent&&labels.length){last={i:I.check,t:labels.join(' · ')}}
+    jReply(last,text)},instant?500:650)};
+  if(instant){jListening('Listening…');chime.listen();setTimeout(run,1100)}else run();
+}
+function jConfirm(yes){const p=S.jarvis.pending;S.jarvis.pending=null;if(!p){endPop();return}jReply(yes?{i:I.check,c:'#30D158',t:p}:{i:I.x,t:'Cancelled'},'')}
+function jDownload(){if(S.jarvis.dl>=0||S.jarvis.ready)return;S.jarvis.dl=0;renderCC();
+  const t=setInterval(()=>{S.jarvis.dl=Math.min(100,S.jarvis.dl+4);pop('jcard',{i:I.down,t:"Downloading Jarvis's ears",s:`One time · stays on this laptop · ${Math.round(S.jarvis.dl)}%`},60000);renderCC();
+    if(S.jarvis.dl>=100){clearInterval(t);S.jarvis.dl=-1;S.jarvis.ready=true;save();renderCC();chime.done();
+      pop('jcard',{i:I.check,c:'#30D158',t:'Jarvis is ready',s:'Hold Ctrl + Space and talk, or say “Jarvis…”'},5000)}},120)}
+
+/* hold to talk: the button, or Ctrl + Space anywhere on the page */
+const holdBtn=$('#holdBtn'),jvText=$('#jvText');
+let holding=false,rec=null,heardLive='';
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+$('#micNote').textContent=SR?'Your browser can also listen for real: allow the microphone and speak while holding.':'';
+function holdStart(){if(holding||!S.jarvis.on)return;
+  if(!S.jarvis.ready){jarvisSay('',false);return}
+  holding=true;holdBtn.setAttribute('aria-pressed','true');jListening('Listening…');chime.listen();heardLive='';
+  if(SR){try{rec=new SR();rec.lang='en-IN';rec.interimResults=true;rec.onresult=e=>{heardLive=[...e.results].map(r=>r[0].transcript).join(' ');
+    if(holding)pop('jarvis',{text:heardLive||'Listening…',listening:true},60000)};rec.onerror=()=>{};rec.start()}catch(e){rec=null}}}
+function holdEnd(){if(!holding)return;holding=false;holdBtn.setAttribute('aria-pressed','false');
+  if(rec){try{rec.stop()}catch(e){}}
+  setTimeout(()=>{const said=(heardLive||jvText.value).trim();if(heardLive)jvText.value=heardLive;rec=null;
+    if(!said){jReply({fail:1,i:I.mic,c:'#FF9F0A',t:"Didn't hear anything"},'');return}jarvisSay(said,false)},rec?350:0)}
+holdBtn.addEventListener('pointerdown',e=>{e.preventDefault();holdBtn.setPointerCapture(e.pointerId);holdStart()});
+holdBtn.addEventListener('pointerup',holdEnd);holdBtn.addEventListener('pointercancel',holdEnd);
+window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.ctrlKey&&!e.altKey&&!e.shiftKey){e.preventDefault();if(!e.repeat)holdStart()}});
+window.addEventListener('keyup',e=>{if(holding&&(e.code==='Space'||e.key==='Control'))holdEnd()});
+jvText.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();jarvisSay(jvText.value,true)}});
+const CHIPS=['open chrome and search for cats','volume 30','next song','set a timer for 2 minutes','remind me to submit DBMS at 5 pm',"what's 15 percent of 2400",
+  'mute','what time is it','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
+$('#jvChips').innerHTML=CHIPS.map(c=>`<button class="btn" data-say="${esc(c)}">${esc(c)}</button>`).join('');
+$('#jvChips').addEventListener('click',e=>{const b=e.target.closest('[data-say]');if(b){jvText.value=b.dataset.say;jarvisSay(b.dataset.say,true)}});
 
 /* ---------- fit & clock ---------- */
 function fit(){scale=wrap.clientWidth/W;stage.style.transform=`scale(${scale})`;wrap.style.height=(H*scale)+'px'}
