@@ -26,14 +26,14 @@ public sealed class CommandRunner
 
     public CommandRunner(App app) => _app = app;
 
-    static Reply Ok(string glyph, string text) => new(glyph, "Accent", text);
-    static Reply Good(string glyph, string text) => new(glyph, "Good", text);
-    static Reply Bad(string text) => new("", "Orange", text, Failed: true);
+    internal static Reply Ok(string glyph, string text) => new(glyph, "Accent", text);
+    internal static Reply Good(string glyph, string text) => new(glyph, "Good", text);
+    internal static Reply Bad(string text) => new("\uE783", "Orange", text, Failed: true);
 
     public async Task<Reply> RunAsync(List<Cmd> cmds)
     {
         var labels = new List<string>();
-        Reply last = Ok("", "Done");
+        Reply last = Ok("\uE73E", "Done");
         for (int i = 0; i < cmds.Count; i++)
         {
             var cmd = cmds[i];
@@ -68,12 +68,14 @@ public sealed class CommandRunner
             case "switch": return await OpenAsync(c.Text, switchFirst: true);
             case "bare":
                 {
-                    var r = await OpenAsync(c.Text, switchFirst: true, strict: true);
+                    // Just a name: only open windows, nicknames and known sites. A misheard word
+                    // ("blip") must not launch some random Start-menu app.
+                    var r = await OpenAsync(c.Text, switchFirst: true, strict: true, knownOnly: true);
                     return r.Failed ? Bad($"Didn't catch a command in \"{c.Text}\"") : r;
                 }
             case "url":
                 Shell(c.Text);
-                return Ok(c.Text.StartsWith("ms-settings") ? "" : "", c.Say.Length > 0 ? c.Say : "Opened");
+                return Ok(c.Text.StartsWith("ms-settings") ? "\uE713" : "\uE774", c.Say.Length > 0 ? c.Say : "Opened");
             case "close-app": return CloseApp(c.Text);
             case "window": return WindowCommand(c.Text, c.Say);
 
@@ -81,10 +83,10 @@ public sealed class CommandRunner
             case "keys":
                 if (c.Keys == null || c.Keys.Length == 0) return Bad("I don't know that key");
                 await KeysAsync(() => InputSim.Repeat(Math.Max(1, c.N), c.Keys));
-                return Ok("", c.Say);
+                return Ok("\uE765", c.Say);
             case "type":
                 await KeysAsync(() => InputSim.Type(c.Text));
-                return Ok("", c.Text.Length > 26 ? $"Typed \"{c.Text[..24]}…\"" : $"Typed \"{c.Text}\"");
+                return Ok("\uE765", c.Text.Length > 26 ? $"Typed \"{c.Text[..24]}…\"" : $"Typed \"{c.Text}\"");
             case "find":
                 await KeysAsync(() =>
                 {
@@ -92,10 +94,10 @@ public sealed class CommandRunner
                     System.Threading.Thread.Sleep(250);
                     InputSim.Type(c.Text);
                 });
-                return Ok("", $"Find \"{c.Text}\"");
+                return Ok("\uE721", $"Find \"{c.Text}\"");
             case "scroll":
                 await KeysAsync(() => InputSim.Scroll(c.N));
-                return Ok(c.N > 0 ? "" : "", c.Say);
+                return Ok(c.N > 0 ? "\uE70E" : "\uE70D", c.Say);
 
             // ---------------- sound & screen ----------------
             case "volume-set":
@@ -104,34 +106,39 @@ public sealed class CommandRunner
             case "volume-step":
                 if (_app.Volume.Muted) _app.Volume.ToggleMute();
                 _app.Volume.Step(c.N);
-                return new Reply("", "Accent", c.N > 0 ? "Louder" : "Quieter", Silent: true);
+                return new Reply("\uE767", "Accent", c.N > 0 ? "Louder" : "Quieter", Silent: true);
+            case "mute" when _app.Calls.State.IsActive:
+                // On a call, "mute" / "unmute" means your microphone, like on a phone.
+                return await RunOneAsync(new Cmd("mic", c.Text));
             case "mute":
                 if ((c.Text == "mute") != _app.Volume.Muted) _app.Volume.ToggleMute();
-                return new Reply("", "Accent", c.Text == "mute" ? "Muted" : "Unmuted", Silent: true);
+                return new Reply("\uE74F", "Accent", c.Text == "mute" ? "Muted" : "Unmuted", Silent: true);
             case "brightness-set":
             case "brightness-step":
                 if (!_app.Brightness.Supported) return Bad("This screen's brightness can't be changed by apps");
                 _app.Brightness.Step(c.Kind == "brightness-set" ? c.N - _app.Brightness.Level : c.N);
-                return new Reply("", "Accent", "Brightness", Silent: true);
+                return new Reply("\uE706", "Accent", "Brightness", Silent: true);
 
             // ---------------- music ----------------
             case "media": return await MediaAsync(c.Text);
+            case "play-app": return await PlayAppAsync(c.Text);
+            case "applemusic": return await AppleMusic.PlayAsync(c.Text, this);
             case "stop":
                 if (_app.Media.State.IsPlaying) return await MediaAsync("pause");
-                return new Reply("", "Accent", "Okay", Silent: true);
+                return new Reply("\uE711", "Accent", "Okay", Silent: true);
             case "playing":
                 {
                     var m = _app.Media.State;
-                    if (!m.HasSession) return Ok("", "Nothing is playing");
+                    if (!m.HasSession) return Ok("\uE8D6", "Nothing is playing");
                     var who = string.IsNullOrWhiteSpace(m.Artist) ? "" : " · " + m.Artist;
-                    return Ok("", $"{m.Title}{who}");
+                    return Ok("\uE8D6", $"{m.Title}{who}");
                 }
 
             // ---------------- questions ----------------
-            case "time": return Ok("", "It's " + DateTime.Now.ToString("h:mm tt"));
-            case "date": return Ok("", DateTime.Now.ToString("dddd, d MMMM"));
+            case "time": return Ok("\uE823", "It's " + DateTime.Now.ToString("h:mm tt"));
+            case "date": return Ok("\uE787", DateTime.Now.ToString("dddd, d MMMM"));
             case "battery": return Battery();
-            case "calc": return Ok("", $"{c.Say} = {c.Text}");
+            case "calc": return Ok("\uE8EF", $"{c.Say} = {c.Text}");
             case "deadlines":
                 _app.ShowWhatsNext();
                 return new Reply("", "Accent", "", Silent: true);
@@ -141,28 +148,28 @@ public sealed class CommandRunner
                 {
                     int secs = c.N > 0 ? c.N : S.FocusMinutes * 60;
                     _app.Timer.StartSeconds(secs, c.Text);
-                    return Good("", $"{c.Text} · {Pretty(secs)}");
+                    return Good("\uE916", $"{c.Text} · {Pretty(secs)}");
                 }
             case "timer-stop":
-                if (!_app.Timer.IsActive) return Ok("", "No timer running");
+                if (!_app.Timer.IsActive) return Ok("\uE916", "No timer running");
                 _app.Timer.End();
-                return Ok("", "Timer stopped");
+                return Ok("\uE916", "Timer stopped");
             case "timer-pause":
-                if (!_app.Timer.IsActive) return Ok("", "No timer running");
+                if (!_app.Timer.IsActive) return Ok("\uE916", "No timer running");
                 _app.Timer.TogglePause();
-                return Ok("", _app.Timer.IsRunning ? "Timer resumed" : "Timer paused");
+                return Ok("\uE916", _app.Timer.IsRunning ? "Timer resumed" : "Timer paused");
             case "timer-add":
-                if (!_app.Timer.IsActive) return Ok("", "No timer running");
+                if (!_app.Timer.IsActive) return Ok("\uE916", "No timer running");
                 _app.Timer.AddFive();
-                return Ok("", "+5 minutes");
+                return Ok("\uE916", "+5 minutes");
             case "remind": return Remind(c);
             case "remind-ask": return Bad($"When? Try \"remind me to {c.Text.ToLowerInvariant()} at 5 pm\"");
 
             // ---------------- calls ----------------
             case "answer":
-                return _app.Ring.Answer() ? Good("", "Answered") : Bad("No call is ringing");
+                return _app.Ring.Answer() ? Good("\uE717", "Answered") : Bad("No call is ringing");
             case "decline":
-                return _app.Ring.Decline() ? new Reply("", "Bad", "Declined") : Bad("No call is ringing");
+                return _app.Ring.Decline() ? new Reply("\uE778", "Bad", "Declined") : Bad("No call is ringing");
             case "hangup":
                 return Bad("Hanging up comes in the next Jarvis update. Use the call window.");
             case "mic":
@@ -173,7 +180,7 @@ public sealed class CommandRunner
                         if (_app.Calls.State.Muted != mute) _app.Calls.ToggleMute(S.DiscordMuteKey, S.DiscordMuteModifiers);
                     }
                     else _app.Mic.SetMuted(mute);
-                    return new Reply(mute ? "" : "", mute ? "Bad" : "Good", mute ? "Mic muted" : "Mic on");
+                    return new Reply(mute ? "\uEC54" : "\uE720", mute ? "Bad" : "Good", mute ? "Mic muted" : "Mic on");
                 }
 
             // ---------------- the PC ----------------
@@ -181,10 +188,10 @@ public sealed class CommandRunner
             case "theme": return Theme(c.Text);
             case "power": return Power(c.Text);
             case "recycle":
-                return new Reply("", "Orange", "Empty the Recycle Bin?", Confirm: () =>
+                return new Reply("\uE74D", "Orange", "Empty the Recycle Bin?", Confirm: () =>
                 {
                     int hr = SHEmptyRecycleBin(IntPtr.Zero, null, 0x1 | 0x2 | 0x4);
-                    return Task.FromResult(hr == 0 || hr == unchecked((int)0x8000FFFF) ? Ok("", "Recycle Bin emptied") : Bad("Couldn't empty the Recycle Bin"));
+                    return Task.FromResult(hr == 0 || hr == unchecked((int)0x8000FFFF) ? Ok("\uE74D", "Recycle Bin emptied") : Bad("Couldn't empty the Recycle Bin"));
                 });
 
             // ---------------- DyIsd & Jarvis ----------------
@@ -192,16 +199,16 @@ public sealed class CommandRunner
             case "jarvis":
                 S.JarvisWakeWord = c.Text == "wake";
                 SettingsStore.Save();
-                return Ok("", S.JarvisWakeWord ? "Listening for \"Jarvis\" again" : "Okay, only Ctrl + Space now");
+                return Ok("\uE720", S.JarvisWakeWord ? "Listening for \"Jarvis\" again" : "Okay, only Ctrl + Space now");
             case "help":
-                return Ok("", "Try: open chrome · search youtube for lofi · volume 40 · type hello · remind me to study at 7");
-            case "thanks": return new Reply("", "Good", "Anytime, Imran");
-            case "hello": return new Reply("", "Good", "Hey Imran. What do you need?");
-            case "howareyou": return new Reply("", "Good", "Running smooth. What do you need?");
-            case "whoami": return Ok("", "I'm Jarvis, DyIsd's voice. Say \"help\" for ideas.");
-            case "cancel": return new Reply("", "Accent", "Okay", Silent: true);
-            case "yes": return Ok("", "Nothing to confirm");
-            case "later": return new Reply("", "Purple", c.Text, Failed: true);
+                return Ok("\uE897", "Try: open chrome · search youtube for lofi · volume 40 · type hello · remind me to study at 7");
+            case "thanks": return new Reply("\uE8E1", "Good", "Anytime, Imran");
+            case "hello": return new Reply("\uE8E1", "Good", "Hey Imran. What do you need?");
+            case "howareyou": return new Reply("\uE8E1", "Good", "Running smooth. What do you need?");
+            case "whoami": return Ok("\uE720", "I'm Jarvis, DyIsd's voice. Say \"help\" for ideas.");
+            case "cancel": return new Reply("\uE711", "Accent", "Okay", Silent: true);
+            case "yes": return Ok("\uE73E", "Nothing to confirm");
+            case "later": return new Reply("\uE823", "Purple", c.Text, Failed: true);
             default: return Bad($"Didn't catch a command in \"{c.Text}\"");
         }
     }
@@ -284,10 +291,11 @@ public sealed class CommandRunner
         ["home folder"] = "shell:Profile", ["user folder"] = "shell:Profile", ["appdata"] = "shell:Local AppData",
         ["app data"] = "shell:Local AppData", ["temp"] = "%TEMP%", ["temp folder"] = "%TEMP%", ["startup folder"] = "shell:Startup",
         ["onedrive"] = "shell:OneDrive", ["one drive"] = "shell:OneDrive", ["control panel"] = "shell:ControlPanelFolder",
-        ["dyisd folder"] = Log.Dir, ["dyisd logs"] = Log.Dir, ["your logs"] = Log.Dir, ["log"] = Log.Dir,
+        ["dyisd folder"] = Log.RealDir, ["dyisd logs"] = Log.RealDir, ["your logs"] = Log.RealDir, ["log"] = Log.RealDir,
+        ["logs"] = Log.RealDir, ["log folder"] = Log.RealDir, ["the log folder"] = Log.RealDir,
     };
 
-    async Task<Reply> OpenAsync(string target, bool switchFirst, bool strict = false)
+    async Task<Reply> OpenAsync(string target, bool switchFirst, bool strict = false, bool knownOnly = false)
     {
         var t = target.Trim().TrimEnd('.');
         t = System.Text.RegularExpressions.Regex.Replace(t, @"^(?:the|my|a|an)\s+", "");
@@ -298,12 +306,12 @@ public sealed class CommandRunner
         if (sm.Success)
         {
             var key = sm.Groups[1].Success ? sm.Groups[1].Value : sm.Groups[2].Value;
-            if (SettingsPages.TryGetValue(key, out var page)) { Shell("ms-settings:" + page); return Ok("", Title(key) + " settings"); }
+            if (SettingsPages.TryGetValue(key, out var page)) { Shell("ms-settings:" + page); return Ok("\uE713", Title(key) + " settings"); }
         }
         if (Folders.TryGetValue(t, out var folder))
         {
             Shell(Environment.ExpandEnvironmentVariables(folder));
-            return Ok("", Title(t));
+            return Ok("\uE8B7", Title(t));
         }
 
         // An address: "github.com", "example dot com"
@@ -311,33 +319,33 @@ public sealed class CommandRunner
         if (System.Text.RegularExpressions.Regex.IsMatch(addr, @"^[\w-]+(\.[\w-]+)*\.(com|in|org|net|io|ai|dev|edu|co|app|me|gov|info|xyz|tech|ly|gg|tv)(/\S*)?$"))
         {
             Shell("https://" + addr);
-            return Ok("", addr);
+            return Ok("\uE774", addr);
         }
 
         // Already open? Bring it to the front.
         if (switchFirst && FindWindow(t) is { } win)
         {
             FocusWindow(win.Handle);
-            return Ok("", Title(win.Name));
+            return Ok("\uE8A7", Title(win.Name));
         }
 
-        var app = AppCatalog.Find(t);
+        var app = knownOnly && !AppCatalog.IsAlias(t) ? null : AppCatalog.Find(t);
         bool siteKnown = SitesMap.TryGetValue(t, out var site);
         // An installed app with this exact name wins; otherwise the website.
         if (app != null && (!siteKnown || AppCatalog.Normalize(app.Name) == AppCatalog.Normalize(t) || AppCatalog.IsAlias(t)))
         {
             AppCatalog.Launch(app);
-            return Ok("", app.Name);
+            return Ok("\uE8A7", app.Name);
         }
         if (siteKnown)
         {
             Shell(site!);
-            return Ok("", Title(t));
+            return Ok("\uE774", Title(t));
         }
         if (!strict && FindWindow(t) is { } w2)
         {
             FocusWindow(w2.Handle);
-            return Ok("", Title(w2.Name));
+            return Ok("\uE8A7", Title(w2.Name));
         }
         if (strict) return Bad($"No app called \"{t}\"");
         await Task.CompletedTask;
@@ -388,7 +396,7 @@ public sealed class CommandRunner
         return t.Contains(said) && said.Length >= 4 ? 0.85 : Fuzzy.Score(said, tail) * 0.95;
     }
 
-    static void FocusWindow(IntPtr h)
+    internal static void FocusWindow(IntPtr h)
     {
         // Windows only lets the app that got the last key press change the front window,
         // so press a key nobody uses (F24) first.
@@ -406,7 +414,7 @@ public sealed class CommandRunner
         {
             try { if (p.MainWindowHandle != IntPtr.Zero && p.CloseMainWindow()) closed++; } catch { }
         }
-        return closed > 0 ? Ok("", "Closed " + Title(hit.Name)) : Bad($"Couldn't close {hit.Name}");
+        return closed > 0 ? Ok("\uE711", "Closed " + Title(hit.Name)) : Bad($"Couldn't close {hit.Name}");
     }
 
     static Reply WindowCommand(string what, string say)
@@ -414,7 +422,7 @@ public sealed class CommandRunner
         var h = Win32.GetForegroundWindow();
         if (h == IntPtr.Zero) return Bad("No window in front");
         Win32.ShowWindow(h, what switch { "minimize" => 6, "maximize" => 3, _ => Win32.SW_RESTORE });
-        return Ok("", say);
+        return Ok("\uE737", say);
     }
 
     static async Task WaitForNewWindowAsync(int maxMs)
@@ -429,7 +437,7 @@ public sealed class CommandRunner
         await Task.Delay(waited >= maxMs ? 0 : 600); // let it finish drawing and focus its text box
     }
 
-    static Task KeysAsync(Action press) => Task.Run(() =>
+    internal static Task KeysAsync(Action press) => Task.Run(() =>
     {
         InputSim.WaitForKeysReleased();
         press();
@@ -440,28 +448,53 @@ public sealed class CommandRunner
     async Task<Reply> MediaAsync(string what)
     {
         var m = _app.Media;
-        if (!m.State.HasSession) return Bad("Nothing is playing. Say \"play\" and a song to search YouTube.");
+        if (!m.State.HasSession)
+        {
+            // A music app that's open but hasn't played yet has no session: the play key still wakes it.
+            if (what == "play" && Uia.Running("applemusic", "spotify", "itunes", "vlc"))
+            {
+                await KeysAsync(() => InputSim.Combo(0xB3));
+                return new Reply("\uE768", "Accent", "Playing", Silent: true);
+            }
+            return Bad("Nothing is playing. Say \"play\" and a song to search YouTube.");
+        }
         switch (what)
         {
             case "play":
                 if (!m.State.IsPlaying) await m.TogglePlayPauseAsync();
-                return new Reply("", "Accent", "Playing", Silent: true);
+                return new Reply("\uE768", "Accent", "Playing", Silent: true);
             case "pause":
                 if (m.State.IsPlaying) await m.TogglePlayPauseAsync();
-                return new Reply("", "Accent", "Paused", Silent: true);
-            case "next": await m.NextAsync(); return new Reply("", "Accent", "Next", Silent: true);
-            case "prev": await m.PreviousAsync(); return new Reply("", "Accent", "Previous", Silent: true);
+                return new Reply("\uE769", "Accent", "Paused", Silent: true);
+            case "next": await m.NextAsync(); return new Reply("\uE893", "Accent", "Next", Silent: true);
+            case "prev": await m.PreviousAsync(); return new Reply("\uE892", "Accent", "Previous", Silent: true);
             case "restart":
                 if (m.State.CanSeek) await m.SeekAsync(0); else await m.PreviousAsync();
-                return new Reply("", "Accent", "From the top", Silent: true);
+                return new Reply("\uE72C", "Accent", "From the top", Silent: true);
             case "shuffle":
                 await m.ToggleShuffleAsync();
-                return Ok("", m.State.Shuffle ? "Shuffle off" : "Shuffle on");
+                return Ok("\uE8B1", m.State.Shuffle ? "Shuffle off" : "Shuffle on");
             case "repeat":
                 await m.CycleRepeatAsync();
-                return Ok("", "Repeat changed");
+                return Ok("\uE8EE", "Repeat changed");
         }
         return Bad("Hmm?");
+    }
+
+    /// <summary>"play apple music": open it if needed, then press play once it's ready.</summary>
+    async Task<Reply> PlayAppAsync(string which)
+    {
+        string proc = which == "spotify" ? "spotify" : "applemusic";
+        if (!Uia.Running(proc))
+        {
+            var app = AppCatalog.Find(which);
+            if (app == null) return Bad($"{Title(which)} isn't installed");
+            AppCatalog.Launch(app);
+            for (int i = 0; i < 40 && !Uia.Running(proc); i++) await Task.Delay(200);
+            await Task.Delay(2500); // let it load its library
+        }
+        if (!_app.Media.State.IsPlaying) await KeysAsync(() => InputSim.Combo(0xB3));
+        return Ok("\uE768", "Playing " + Title(which));
     }
 
     // ---------------- battery ----------------
@@ -469,7 +502,7 @@ public sealed class CommandRunner
     static Reply Battery()
     {
         var ps = WF.SystemInformation.PowerStatus;
-        if (ps.BatteryChargeStatus.HasFlag(WF.BatteryChargeStatus.NoSystemBattery)) return Ok("", "No battery, you're on power");
+        if (ps.BatteryChargeStatus.HasFlag(WF.BatteryChargeStatus.NoSystemBattery)) return Ok("\uE83F", "No battery, you're on power");
         int pct = (int)Math.Round(ps.BatteryLifePercent * 100);
         bool charging = ps.PowerLineStatus == WF.PowerLineStatus.Online;
         string extra = charging ? " · charging" : ps.BatteryLifeRemaining > 0 ? $" · about {Pretty(ps.BatteryLifeRemaining / 60 * 60)} left" : "";
@@ -492,7 +525,7 @@ public sealed class CommandRunner
         S.ManualDeadlines.Add(d);
         SettingsStore.Save();
         string day = when.Date == DateTime.Today ? "today" : when.Date == DateTime.Today.AddDays(1) ? "tomorrow" : when.ToString("ddd d MMM");
-        return Good("", $"{(deadline ? "Deadline" : "Reminder")}: {c.Text} · {day} {when:h:mm tt}");
+        return Good("\uE787", $"{(deadline ? "Deadline" : "Reminder")}: {c.Text} · {day} {when:h:mm tt}");
     }
 
     // ---------------- Wi-Fi, Bluetooth, theme, power ----------------
@@ -509,7 +542,7 @@ public sealed class CommandRunner
             bool on = state switch { 1 => true, 0 => false, _ => list[0].State != RadioState.On };
             foreach (var r in list) await r.SetStateAsync(on ? RadioState.On : RadioState.Off);
             string name = which == "all" ? (on ? "Airplane mode off" : "Airplane mode on") : (which == "wifi" ? "Wi-Fi " : "Bluetooth ") + (on ? "on" : "off");
-            return Ok(which == "bluetooth" ? "" : which == "wifi" ? "" : "", name);
+            return Ok(which == "bluetooth" ? "\uE702" : which == "wifi" ? "\uE701" : "\uE709", name);
         }
         catch (Exception ex)
         {
@@ -534,7 +567,7 @@ public sealed class CommandRunner
         k.SetValue("SystemUsesLightTheme", light ? 1 : 0, RegistryValueKind.DWord);
         // Tell open apps the theme changed.
         SendMessageTimeout((IntPtr)0xFFFF, 0x001A, IntPtr.Zero, "ImmersiveColorSet", 0x2, 200, out _);
-        return Ok(light ? "" : "", light ? "Light mode" : "Dark mode");
+        return Ok(light ? "\uE706" : "\uE708", light ? "Light mode" : "Dark mode");
     }
 
     static Reply Power(string what)
@@ -543,31 +576,31 @@ public sealed class CommandRunner
         {
             case "lock":
                 LockWorkStation();
-                return new Reply("", "Accent", "Locked", Silent: true);
+                return new Reply("\uE72E", "Accent", "Locked", Silent: true);
             case "sleep":
-                return new Reply("", "Orange", "Put the laptop to sleep?", Confirm: async () =>
+                return new Reply("\uE708", "Orange", "Put the laptop to sleep?", Confirm: async () =>
                 {
                     await Task.Delay(800);
                     SetSuspendState(false, false, false);
-                    return Ok("", "Sleeping");
+                    return Ok("\uE708", "Sleeping");
                 });
             case "shutdown":
-                return new Reply("", "Bad", "Shut down the laptop?", Confirm: () =>
+                return new Reply("\uE7E8", "Bad", "Shut down the laptop?", Confirm: () =>
                 {
                     Process.Start(new ProcessStartInfo("shutdown", "/s /t 2") { CreateNoWindow = true, UseShellExecute = false });
-                    return Task.FromResult(Ok("", "Shutting down"));
+                    return Task.FromResult(Ok("\uE7E8", "Shutting down"));
                 });
             case "restart":
-                return new Reply("", "Orange", "Restart the laptop?", Confirm: () =>
+                return new Reply("\uE777", "Orange", "Restart the laptop?", Confirm: () =>
                 {
                     Process.Start(new ProcessStartInfo("shutdown", "/r /t 2") { CreateNoWindow = true, UseShellExecute = false });
-                    return Task.FromResult(Ok("", "Restarting"));
+                    return Task.FromResult(Ok("\uE777", "Restarting"));
                 });
             default:
-                return new Reply("", "Orange", "Sign out of Windows?", Confirm: () =>
+                return new Reply("\uE748", "Orange", "Sign out of Windows?", Confirm: () =>
                 {
                     Process.Start(new ProcessStartInfo("shutdown", "/l") { CreateNoWindow = true, UseShellExecute = false });
-                    return Task.FromResult(Ok("", "Signing out"));
+                    return Task.FromResult(Ok("\uE748", "Signing out"));
                 });
         }
     }
@@ -578,17 +611,17 @@ public sealed class CommandRunner
         {
             case "hide":
                 _ = Task.Delay(1800).ContinueWith(_ => _app.Dispatcher.BeginInvoke(() => _app.IslandPaused = true));
-                return Ok("", "Hiding the island. Tray icon brings it back.");
+                return Ok("\uE7B3", "Hiding the island. Tray icon brings it back.");
             case "show":
                 _app.IslandPaused = false;
-                return Ok("", "Island's back");
+                return Ok("\uE7B3", "Island's back");
             case "settings":
                 _app.OpenControlCenter();
-                return new Reply("", "Accent", "Control Center", Silent: true);
+                return new Reply("\uE713", "Accent", "Control Center", Silent: true);
             default:
                 S.Position = what;
                 SettingsStore.Save();
-                return Ok("", "Moved " + what);
+                return Ok("\uE7B3", "Moved " + what);
         }
     }
 

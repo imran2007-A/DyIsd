@@ -331,7 +331,11 @@ public static class CommandParser
         Add(@"(?:call|ring|phone|video call) .+ (?:on|in|via) (?:whatsapp|discord|teams)", (_, _) => new Cmd("later", "Starting calls comes in the next Jarvis update"));
         Add(@"(?:ask|tell) (?:claude|chat gpt|chatgpt) .+|(?:new|start a new|start new|open a new) (?:claude )?(?:chat|session|conversation)(?: (?:in|on) claude)?",
             (_, _) => new Cmd("later", "Claude sessions come in the next Jarvis update"));
-        Add(@"play (.+?) (?:on|in|from|with) (?:apple music|music|itunes|the music app)", (m, _) => new Cmd("later", "Playing songs by name in Apple Music comes next update"));
+        // "play apple music", "play a song from apple music": start the app and press play.
+        Add(@"(?:play|start|put on|open and play)(?: (?:some|a|my|the))? (?:apple music|music app|the music app|itunes|spotify|my music)|(?:play|start|put on)(?: (?:some|a|any|my|the))? (?:song|songs|music|track)s? (?:on|in|from|with) (?:apple music|music|itunes|spotify|the music app)",
+            (m, _) => new Cmd("play-app", m.Value.Contains("spotify") ? "spotify" : "apple music"));
+        // "play believer on apple music": search Apple Music and play the first result.
+        Add(@"play (.+?) (?:on|in|from|with|using) (?:apple music|music|itunes|the music app)", (m, _) => new Cmd("applemusic", m.Groups[1].Value));
 
         // ----- questions Jarvis answers itself -----
         Add(@"(?:whats|tell me|say) (?:the )?time(?: (?:now|right now|is it|it is))?|what time is it(?: now| right now)?|time(?: now| please| check)?|current time|what time it is|whats the time now|time right now",
@@ -393,13 +397,13 @@ public static class CommandParser
             (_, _) => new Cmd("brightness-set", N: 0));
         Add($@"(?:(?:turn|bring|make) (?:the )?(?:brightness|screen) up|(?:screen )?brightness up|increase (?:the )?(?:screen )?brightness|raise (?:the )?brightness|brighter|(?:make (?:it|the screen) )?brighter|more brightness|brighten(?: (?:it|the screen|up))?|its too dark|too dark|i cant see)(?: (?:by|to) {Num}(?: {Units})?)?(?: (a lot|a little|a bit|little|bit|slightly|more))?",
             (m, _) => new Cmd("brightness-step", N: Step(m, 15)));
-        Add($@"(?:(?:turn|bring|make) (?:the )?(?:brightness|screen) down|(?:screen )?brightness down|decrease (?:the )?(?:screen )?brightness|lower (?:the )?brightness|reduce (?:the )?brightness|dimmer|dim(?: (?:it|the screen|the display|down))?|(?:make (?:it|the screen) )?(?:dimmer|darker)|less brightness|too bright|its too bright)(?: (?:by|to) {Num}(?: {Units})?)?(?: (a lot|a little|a bit|little|bit|slightly|more))?",
+        Add($@"(?:(?:turn|bring|make) (?:the )?(?:brightness|screen) down|(?:screen )?brightness down|decrease (?:the )?(?:screen )?brightness|lower (?:the )?brightness|reduce (?:the )?brightness|dimmer|dim(?: (?:it|the screen|the display|down|the brightness|brightness|the light))?|(?:make (?:it|the screen) )?(?:dimmer|darker)|less brightness|too bright|its too bright)(?: (?:by|to) {Num}(?: {Units})?)?(?: (a lot|a little|a bit|little|bit|slightly|more))?",
             (m, _) => new Cmd("brightness-step", N: -Step(m, 15)));
 
         // ----- music & video -----
         Add(@"(?:play|resume|continue|unpause|start)(?: (?:the |my )?(?:music|song|songs|video|it|playback|media|track|audio|playing|again|that))?(?: again)?|play music|music on|play some music|press play",
             (_, _) => new Cmd("media", "play"));
-        Add(@"(?:pause|hold|freeze)(?: (?:the |my |this )?(?:music|song|video|it|playback|media|track|audio|that|youtube|this))?|stop (?:the |my |this )?(?:music|song|video|playback|media|track|audio|playing|youtube)|music off|press pause",
+        Add(@"(?:pause|hold|freeze)(?: (?:the |my |this )?(?:music|song|video|it|playback|media|track|audio|that|youtube|this))?|stop (?:the |my |this )?(?:music|song|video|playback|media|track|audio|playing|youtube)|music off|press pause|(?:turn off|switch off|shut off|stop) (?:the )?(?:youtube|music|song|video|apple music|spotify|the music)",
             (_, _) => new Cmd("media", "pause"));
         Add(@"stop|stop it|stop that|stop this", (_, _) => new Cmd("stop"));
         Add(@"(?:next|skip)(?: (?:the |this )?(?:song|track|video|one|this|it|music|ahead))?|play (?:the )?next(?: (?:song|track|video|one))?|(?:go to|change) (?:the )?next (?:song|track|video)|change (?:the |this )?(?:song|track)|skip (?:this|it)|another song|different song",
@@ -430,6 +434,9 @@ public static class CommandParser
                 return SiteSearch(site, q);
             });
         Add(@"(?:youtube|yt) (.+)", (m, _) => SiteSearch("youtube", m.Groups[1].Value));
+        // "open friends on prime video", "watch interstellar on netflix (in chrome)"
+        Add($@"(?:open|watch|show|show me|find|stream|put on|look for|get) (.+?) (?:on|in|from) (?:the )?({Sites})(?: (?:at|in|on|using) (?:chrome|the browser|browser))?",
+            (m, _) => SiteSearch(m.Groups[2].Value, m.Groups[1].Value));
         Add(@"(?:find|search(?: for)?|look for) (.+?) (?:on|in) (?:this|the) page|find on (?:this )?page (.+)", (m, _) => new Cmd("find", First(m), Say: "Find on page"));
         Add(@"(?:images?|pictures?|photos?|pics) of (.+)|show me (?:images?|pictures?|photos?|pics) of (.+)", (m, _) => SiteSearch("images", First(m)));
         Add(@"(?:get |show me |give me )?directions to (.+)|(?:how (?:do i|to|can i) get) to (.+)|route to (.+)",

@@ -65,6 +65,8 @@ public sealed class EarbudsService
             int? battery = await BatteryAsync(name);
             if (battery != null) _ = _ui.BeginInvoke(() => Changed?.Invoke(name, true, battery));
         }
+        catch (ArgumentException) { }  // not a Bluetooth device (Windows lists other devices here too)
+        catch (System.Runtime.InteropServices.COMException) { } // Bluetooth was just switched off
         catch (Exception ex)
         {
             Log.Error("earbuds check", ex);

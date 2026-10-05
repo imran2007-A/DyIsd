@@ -70,7 +70,7 @@ public sealed class JarvisService : IDisposable
         _speech.Downloading += p => _ui.BeginInvoke(() =>
         {
             DownloadProgress = p;
-            _island.ShowJarvisCard("", "Accent", "Downloading Jarvis's ears", "One time · stays on this laptop", $"{(int)(p * 100)}%", null, null, 320, 60000);
+            _island.ShowJarvisCard("\uE896", "Accent", "Downloading Jarvis's ears", "One time · stays on this laptop", $"{(int)(p * 100)}%", null, null, 320, 60000);
             StatusChanged?.Invoke();
         });
         Apply();
@@ -128,7 +128,7 @@ public sealed class JarvisService : IDisposable
         catch (Exception ex)
         {
             Log.Error("jarvis mic", ex);
-            _island.ShowJarvisCard("", "Bad", "Can't use the microphone", "Settings › Privacy › Microphone › let desktop apps use it", null, null, null, 400, 6000);
+            _island.ShowJarvisCard("\uE720", "Bad", "Can't use the microphone", "Settings › Privacy › Microphone › let desktop apps use it", null, null, null, 400, 6000);
             Chime.Error();
             return;
         }
@@ -194,7 +194,7 @@ public sealed class JarvisService : IDisposable
 
             if (IsNothing(text))
             {
-                ShowReply("", new Reply("", "Orange", "Didn't hear anything", Failed: true));
+                ShowReply("", new Reply("\uE720", "Orange", "Didn't hear anything", Failed: true));
                 return;
             }
             await ActAsync(text);
@@ -202,7 +202,7 @@ public sealed class JarvisService : IDisposable
         catch (Exception ex)
         {
             Log.Error("jarvis", ex);
-            ShowReply("", new Reply("", "Bad", "Jarvis hit a problem · see log", Failed: true));
+            ShowReply("", new Reply("\uE783", "Bad", "Jarvis hit a problem · see log", Failed: true));
         }
         finally
         {
@@ -240,7 +240,7 @@ public sealed class JarvisService : IDisposable
             if (DateTime.Now < _pendingUntil)
             {
                 if (cmds[0].Kind == "yes") { ShowReply(text, await pending.Confirm!()); return; }
-                if (cmds[0].Kind == "cancel") { ShowReply(text, new Reply("", "Accent", "Cancelled")); return; }
+                if (cmds[0].Kind == "cancel") { ShowReply(text, new Reply("\uE711", "Accent", "Cancelled")); return; }
             }
         }
 
@@ -267,7 +267,7 @@ public sealed class JarvisService : IDisposable
         _pending = null;
         _armedUntil = default;
         if (pending?.Confirm == null) { _island.EndJarvis(); return; }
-        ShowReply("", yes ? await pending.Confirm() : new Reply("", "Accent", "Cancelled"));
+        ShowReply("", yes ? await pending.Confirm() : new Reply("\uE711", "Accent", "Cancelled"));
     }
 
     // ---------------- island ----------------
@@ -307,7 +307,7 @@ public sealed class JarvisService : IDisposable
     void OfferDownload()
     {
         if (_downloading) return;
-        _island.ShowJarvisCard("", "Accent", "Jarvis needs a one-time download", "Speech model · 470 MB · runs on this laptop", null, "Download", "Later", 400, 12000);
+        _island.ShowJarvisCard("\uE720", "Accent", "Jarvis needs a one-time download", "Speech model · 470 MB · runs on this laptop", null, "Download", "Later", 400, 12000);
     }
 
     public async void StartDownload()
@@ -318,12 +318,12 @@ public sealed class JarvisService : IDisposable
         try
         {
             await _speech.EnsureStartedAsync();
-            _island.ShowJarvisCard("", "Good", "Jarvis is ready", "Hold Ctrl + Space and talk, or say “Jarvis”", null, null, null, 380, 6000);
+            _island.ShowJarvisCard("\uE73E", "Good", "Jarvis is ready", "Hold Ctrl + Space and talk, or say “Jarvis”", null, null, null, 380, 6000);
             Chime.Done();
         }
         catch (Exception ex)
         {
-            _island.ShowJarvisCard("", "Bad", "Download failed", ex.Message, null, null, null, 380, 6000);
+            _island.ShowJarvisCard("\uE783", "Bad", "Download failed", ex.Message, null, null, null, 380, 6000);
             Chime.Error();
         }
         finally

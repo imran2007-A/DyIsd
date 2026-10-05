@@ -57,7 +57,7 @@ Things you can say (and many ways to say each):
 | Search | "search for cats", "search youtube for lofi", "look up recursion on wikipedia", "images of red pandas", "directions to SRM Ramapuram", "weather in Chennai", "translate good morning to Tamil", "who is…/how to…" |
 | Typing & keys | "type hello and press enter", "new tab", "close this tab", "reopen the last tab", "go to tab 3", "copy", "paste", "undo", "select all", "save", "press control shift t", "press page down 3 times", "take a screenshot", "show desktop", "minimize this", "snap left" |
 | Scrolling | "scroll down", "scroll up a lot", "scroll down 3", "scroll to the top" |
-| Music & YouTube | "play", "pause", "next song", "previous", "restart the song", "shuffle", "what's playing", "play Believer" (YouTube search) |
+| Music & YouTube | "play", "pause", "next song", "previous", "restart the song", "shuffle", "what's playing", "play Believer" (YouTube search), "play Apple Music", "play Believer on Apple Music" (searches Apple Music and plays the first match), "watch Friends on Prime Video", "turn off YouTube" |
 | Sound & screen | "volume 40", "volume up a bit", "louder", "mute", "brightness 70", "dimmer" |
 | PC | "turn off wifi", "bluetooth on", "airplane mode", "dark mode", "lock the computer", "shut down / restart" (asks first), "empty the recycle bin" (asks first) |
 | Time & reminders | "what time is it", "what's the date", "how much battery", "set a timer for 5 minutes", "start focus for 40 minutes", "remind me to submit DBMS tomorrow at 5 pm", "I have an OS lab record due Friday", "what's due" |
@@ -65,15 +65,19 @@ Things you can say (and many ways to say each):
 | Calls | "answer", "decline", "mute me" |
 | DyIsd | "hide the island", "move the island left", "open control center", "go to sleep" (stops listening for its name), "help" |
 
-Coming next: playing a song by name in Apple Music, WhatsApp messages (with a confirm step),
+Coming next: playing the first YouTube result, WhatsApp messages (with a confirm step),
 Discord deafen/join, and typing prompts into Claude.
+
+A single word on its own ("Discord") only opens apps that are already open, have a nickname
+DyIsd knows, or are known websites, so a misheard word never launches a random app. Say
+"open …" for anything else. On a call, "mute" / "unmute" means your microphone.
 
 ## Honest limits
 
-- **Ringing calls, Windows Clock and file transfers** are read off those apps' windows with
+- **Apple Music play-by-name, ringing calls, Windows Clock and file transfers** are read off those apps' windows with
   UI Automation (what screen readers use), because Windows has no API for them. They depend on
   how each app labels its buttons and may need tuning on your PC: `log.txt` records what DyIsd
-  saw (lines starting `ring sees`, `clock sees`, `transfer sees`; see "Where things are" for the folder). Send those if one doesn't show.
+  saw (lines starting `apple music sees`, `ring sees`, `clock sees`, `transfer sees`; see "Where things are" for the folder). Send those if one doesn't show.
 - **Listen for "Jarvis"** keeps the microphone open, so Windows shows its mic icon. Every phrase
   it hears is turned into text on your laptop to check for the name; nothing is sent anywhere.
   It pauses during calls. Turn it off and Ctrl + Space still works.
@@ -97,7 +101,7 @@ To update, do the same with a newer build. Your settings are kept.
 | Settings file | `settings.json` in DyIsd's data folder (below) |
 | Log (send this if something breaks) | `log.txt` in DyIsd's data folder |
 
-DyIsd's data folder:
+DyIsd's data folder (or click **Log folder** at the bottom of the Control Center):
 - **Installed with Install.bat:** Windows keeps installed apps' files private, so it's at
   `%LOCALAPPDATA%\Packages\DyIsd_<letters>\LocalCache\Local\DyIsd`
   (press Win + R, type `%LOCALAPPDATA%\Packages`, open the folder starting with `DyIsd_`).

@@ -72,7 +72,8 @@ public sealed class SpeechEngine : IDisposable
     {
         var names = AppCatalog.Apps.Select(a => a.Name).Where(n => n.Length < 24).Take(40);
         return "Jarvis, open Spotify. Jarvis, search YouTube for lofi beats. Type hello and press enter. " +
-               "Volume up. Close this tab. Scroll down. " + string.Join(", ", names) + ".";
+               "Volume up. Max brightness. Dim the brightness. Close this tab. Scroll down. Play Believer on Apple Music. " +
+               "100 divided by 8. Open Prime Video. Turn off Bluetooth. Mute me. " + string.Join(", ", names) + ".";
     }
 
     async Task DownloadAsync()

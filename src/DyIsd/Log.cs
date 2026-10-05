@@ -11,6 +11,24 @@ internal static class Log
     public static string Dir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DyIsd");
 
+    /// <summary>
+    /// Where Dir really is on disk. When DyIsd is installed (MSIX), Windows quietly redirects its
+    /// files into the app's private folder, which File Explorer can't reach through Dir.
+    /// </summary>
+    public static string RealDir
+    {
+        get
+        {
+            try
+            {
+                if (Native.Win32.IsPackaged)
+                    return Path.Combine(Windows.Storage.ApplicationData.Current.LocalCacheFolder.Path, "Local", "DyIsd");
+            }
+            catch { }
+            return Dir;
+        }
+    }
+
     public static void Write(string message)
     {
         try

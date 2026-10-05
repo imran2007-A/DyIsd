@@ -791,6 +791,13 @@ public partial class ControlCenter : Window
 
     void Quit_Click(object sender, RoutedEventArgs e) => _app.Quit();
 
+    void Logs_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{Log.RealDir}\"")); }
+        catch (Exception ex) { Log.Error("open logs", ex); }
+        Close();
+    }
+
     void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     // ================= helpers =================

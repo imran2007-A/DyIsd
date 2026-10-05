@@ -858,7 +858,7 @@ function renderCC(){
     <div class="opt"><span class="on-l"><b>Discord mute shortcut</b><span>Same keys as in Discord. The island shows when you're muted. Backspace clears it.</span></span><button class="kbd-btn" id="kbdBtn">${S.discordKey||'Set'}</button></div>
     ${OPTS.slice(3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
 
-  <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
+  <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="logs">Log folder</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
   renderDeadlines();wireAdd();
   const kb=$('#kbdBtn');kb.addEventListener('click',()=>{kb.textContent='Press keys…';kb.classList.add('listen');
     const on=e=>{if(['Control','Alt','Shift','Meta'].includes(e.key))return;e.preventDefault();
@@ -939,6 +939,7 @@ cc.addEventListener('click',e=>{
     case 'focus':if(S.acts.timer)stopAct('timer');else startFocus();render();renderCC();break;
     case 'cal':if(S.cal.connected){S.cal.connected=false;S.deadlines=S.deadlines.filter(d=>!d.cal)}else{S.cal.connected=true;pop('msg',{i:I.link,c:'#30D158',t:'Calendar connected · 14 events',w:290},2000)}renderCC();break;
     case 'pause':S.paused=!S.paused;renderCC();render();break;
+    case 'logs':toggleCC(false);pop('msg',{i:I.open,t:'In the real app, this opens the log folder',w:330},2200);break;
     case 'quit':toggleCC(false);pop('msg',{i:I.power,t:'In the real app, this closes DyIsd',w:320},2200);break;
   }
 });
@@ -1050,6 +1051,9 @@ function jOne(orig){
   if(/^(next|skip)( song| track| this)?$/.test(t)){S.media.idx=(S.media.idx+1)%TRACKS.length;S.media.t=0;render();return{silent:true}}
   if(/^(previous|last song|go back a song)( song| track)?$/.test(t)){S.media.idx=(S.media.idx+2)%TRACKS.length;S.media.t=0;render();return{silent:true}}
   if(/^(whats playing|what song is this|whats this song)$/.test(t))return S.acts.media||S.pausedHere?{i:I.music,t:`${trk().title} · ${trk().artist}`}:{i:I.music,t:'Nothing is playing'};
+  if(/^play (?:a |some |the )?(?:apple music|songs? (?:on|from|in) apple music)$/.test(t)){trig('spotify');return{i:I.music,t:'Playing Apple Music'}}
+  if(m=t.match(/^play (.+?) (?:on|in|from) apple music$/)){trig('spotify');return{i:I.music,t:`Apple Music · ${m[1]}`}}
+  if(m=t.match(/^(?:open|watch) (.+?) on (prime video|netflix|hotstar|youtube)$/))return{i:I.globe,t:`${m[2].replace(/\b\w/g,c=>c.toUpperCase())} · ${m[1]}`};
   if(m=t.match(/^play (.+?)(?: on youtube)?$/))return{i:I.globe,t:`YouTube · ${m[1]}`};
   if(m=t.match(/^(?:search|look up|find) (?:for )?(.+?) (?:on|in) (youtube|amazon|flipkart|wikipedia|github|maps|reddit|stack overflow|leetcode|spotify|google)$/)||t.match(/^(?:search) (youtube|amazon|flipkart|wikipedia|github|reddit|leetcode|spotify) for (.+)$/)){
     const [q,site]=SEARCH[m[2]]?[m[1],m[2]]:[m[2],m[1]];return{i:I.globe,t:`${SEARCH[site]} · ${q}`}}
@@ -1123,7 +1127,7 @@ window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.ctrlKey&&!e.altKey&
 window.addEventListener('keyup',e=>{if(holding&&(e.code==='Space'||e.key==='Control'))holdEnd()});
 jvText.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();jarvisSay(jvText.value,true)}});
 const CHIPS=['open chrome and search for cats','volume 30','next song','set a timer for 2 minutes','remind me to submit DBMS at 5 pm',"what's 15 percent of 2400",
-  'mute','what time is it','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
+  'mute','play believer on apple music','watch friends on prime video','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
 $('#jvChips').innerHTML=CHIPS.map(c=>`<button class="btn" data-say="${esc(c)}">${esc(c)}</button>`).join('');
 $('#jvChips').addEventListener('click',e=>{const b=e.target.closest('[data-say]');if(b){jvText.value=b.dataset.say;jarvisSay(b.dataset.say,true)}});
 

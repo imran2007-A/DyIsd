@@ -105,6 +105,28 @@ public static class InputSim
         Send(list);
     }
 
+    [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+    const uint LEFTDOWN = 0x2, LEFTUP = 0x4;
+
+    /// <summary>Clicks (or double-clicks) at a screen point, then puts the mouse back where it was.</summary>
+    public static void Click(int x, int y, bool twice = false)
+    {
+        GetCursorPos(out var old);
+        SetCursorPos(x, y);
+        Thread.Sleep(30);
+        var list = new List<INPUT>();
+        for (int i = 0; i < (twice ? 2 : 1); i++)
+        {
+            list.Add(new INPUT { type = INPUT_MOUSE, U = new InputUnion { mi = new MOUSEINPUT { dwFlags = LEFTDOWN } } });
+            list.Add(new INPUT { type = INPUT_MOUSE, U = new InputUnion { mi = new MOUSEINPUT { dwFlags = LEFTUP } } });
+        }
+        Send(list);
+        Thread.Sleep(60);
+        SetCursorPos(old.X, old.Y);
+    }
+
     /// <summary>Scroll the mouse wheel. Positive = up. One notch = 1.</summary>
     public static void Scroll(int notches)
     {
