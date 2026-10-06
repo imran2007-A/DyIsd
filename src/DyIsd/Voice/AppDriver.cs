@@ -87,14 +87,15 @@ public static class AppDriver
         catch { return false; }
     }
 
-    /// <summary>Puts the cursor in a text box and types, replacing what was there.</summary>
-    public static bool TypeInto(AutomationElement box, string text)
+    /// <summary>Puts the cursor in a text box and types. replace = select what's there first, so it's typed over.</summary>
+    public static bool TypeInto(AutomationElement box, string text, bool replace = true)
     {
         try
         {
             try { box.SetFocus(); } catch { Click(box); }
             Thread.Sleep(150);
-            InputSim.Combo(CommandParser.Ctrl, 'A');
+            if (replace) InputSim.Combo(CommandParser.Ctrl, 'A');
+            else InputSim.Combo(CommandParser.End);
             InputSim.Type(text);
             return true;
         }

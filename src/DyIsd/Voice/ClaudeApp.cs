@@ -17,6 +17,9 @@ public static class ClaudeApp
     static readonly string[] Procs = { "claude" };
     const RegexOptions I = RegexOptions.IgnoreCase;
 
+    /// <summary>When adding after text that may already be there, start with a space so words don't run together.</summary>
+    static string Spaced(string prompt) => " " + prompt;
+
     public static async Task<Reply> AskAsync(string prompt, bool newChat, bool send)
     {
         string result = await Task.Run(() => Drive(prompt, newChat, send));
@@ -29,6 +32,11 @@ public static class ClaudeApp
             _ => CommandRunner.Bad("Couldn't find Claude's message box"),
         };
     }
+
+    // What Jarvis last typed into Claude without sending, so a new "ask Claude" replaces it
+    // instead of gluing onto it. Text you typed yourself is never cleared.
+    static string? _unsent;
+    static DateTime _unsentAt;
 
     static string Drive(string prompt, bool newChat, bool send)
     {
@@ -52,8 +60,11 @@ public static class ClaudeApp
             if (prompt.Length == 0) return btn != null ? "new" : "fail";
         }
 
+        // A new chat starts empty; otherwise replace only Jarvis's own unsent prompt from the last 15 minutes.
+        bool replace = !newChat && _unsent != null && DateTime.Now - _unsentAt < TimeSpan.FromMinutes(15);
+        if (newChat) _unsent = null;
         var box = AppDriver.WaitFor(win, new Regex(@"(prompt|message|reply|claude|help you|write|talk)", I), 3000, ControlType.Edit, ControlType.Document);
-        if (box != null) AppDriver.TypeInto(box.Element, prompt);
+        if (box != null) AppDriver.TypeInto(box.Element, replace || newChat ? prompt : Spaced(prompt), replace);
         else
         {
             Log.Write("claude sees boxes: " + AppDriver.Describe(win, 12, ControlType.Edit, ControlType.Document, ControlType.Group));
@@ -62,11 +73,19 @@ public static class ClaudeApp
             if (r.IsEmpty) return "fail";
             InputSim.Click((int)(r.Left + r.Width / 2), (int)(r.Bottom - 110));
             Thread.Sleep(200);
-            InputSim.Type(prompt);
+            if (replace) InputSim.Combo(CommandParser.Ctrl, 'A');
+            else InputSim.Combo(CommandParser.Ctrl, CommandParser.End);
+            InputSim.Type(replace || newChat ? prompt : Spaced(prompt));
         }
-        if (!send) return "typed";
+        if (!send)
+        {
+            _unsent = prompt;
+            _unsentAt = DateTime.Now;
+            return "typed";
+        }
         Thread.Sleep(150);
         InputSim.Combo(CommandParser.Enter);
+        _unsent = null; // the box is empty again
         return "sent";
     }
 }
