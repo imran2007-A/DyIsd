@@ -37,7 +37,8 @@ public static class CommandParser
     static readonly string Verbs =
         "open|launch|start|close|quit|exit|search|google|look|find|type|write|dictate|press|hit|scroll|play|pause|resume|skip|go|switch|" +
         "minimi[sz]e|maximi[sz]e|mute|unmute|set|turn|take|lock|show|hide|copy|paste|undo|redo|select|save|refresh|reload|zoom|reopen|" +
-        "increase|decrease|lower|raise|move|snap|remind|translate|navigate|empty|enable|disable|answer|decline|send|new";
+        "increase|decrease|lower|raise|move|snap|remind|translate|navigate|empty|enable|disable|answer|decline|send|new|" +
+        "message|text|call|ask|tell|join|deafen|undeafen|leave|hang";
 
     static readonly Regex Splitter2 = new($@"(?:\s*,\s*(?:and\s+|then\s+)?|\s+(?:and\s+then|and|then|after\s+that|also)\s+)(?=(?:{Verbs})\b)", I);
     static readonly Regex TypeStart = new(@"^\s*(?:type|write|dictate)(?:\s+(?:out|down|in))?\b\s*[:,]?\s*", I);
@@ -118,6 +119,8 @@ public static class CommandParser
         s = Regex.Replace(s, @"\.(?!\w)|(?<!\w)\.", " ");
         s = Regex.Replace(s, "[,!?;\"“”()]", " ");
         s = Regex.Replace(s, @"\bwi\s*-?\s*fi\b", "wifi");
+        s = Regex.Replace(s, "[®™©]", "");
+        s = Regex.Replace(s, @"\bscreen\s+shot\b", "screenshot");
         s = Regex.Replace(s, @"\byou\s+tube\b", "youtube");
         s = Regex.Replace(s, @"\bblue\s+tooth\b", "bluetooth");
         s = Regex.Replace(s, @"\be-mail\b", "email");
@@ -138,6 +141,10 @@ public static class CommandParser
     {
         string orig = original.Trim();
 
+        // "type / send hi to Abhishek on WhatsApp" is a WhatsApp message, not typing.
+        var wa = Regex.Match(orig.TrimEnd('.', '!'), @"^\s*(?:type|write|send|text)\s+(?<msg>.+?)\s+to\s+(?<who>[\w ]{2,30}?)\s+(?:on|in|via|through)\s+whats\s?app$", I);
+        if (wa.Success) return new Cmd("whatsapp-msg", wa.Groups["who"].Value.Trim(), Say: wa.Groups["msg"].Value.Trim());
+
         // Typing keeps your exact words, capitals and punctuation.
         if (TypeStart.IsMatch(orig))
         {
@@ -148,7 +155,11 @@ public static class CommandParser
             return text.Length == 0 ? null : new Cmd("type", text, Say: "Typed");
         }
 
-        var trimmed = StripLead(TrailFiller.Replace(orig, ""));
+        // "play cry for me" is a song title: keep "for me" after play / search.
+        var filler = Regex.IsMatch(orig, @"^\W*(?:play|search|google|look up|find|youtube)\b", I)
+            ? Regex.Replace(orig, @"[\s,]*(?:please|right\s+now|thanks|thank\s+you|jarvis)[.!?]*\s*$", "", I)
+            : TrailFiller.Replace(orig, "");
+        var trimmed = StripLead(filler);
         if (trimmed.Length > 0) orig = trimmed;
         var s = Norm(orig);
         if (s.Length == 0) return null;
@@ -161,7 +172,9 @@ public static class CommandParser
         foreach (var (re, keys, say) in PatternShortcuts)
         {
             var m = re.Match(s);
-            if (m.Success) return new Cmd("keys", Keys: keys(m), Say: say(m));
+            if (!m.Success) continue;
+            var k = keys(m);
+            if (k.Length > 0) return new Cmd("keys", Keys: k, Say: say(m));
         }
 
         foreach (var rule in Rules)
@@ -188,7 +201,7 @@ public static class CommandParser
         }
 
         // tabs and browsing
-        Add("new tab|open new tab|open a new tab|open tab|make a new tab|create new tab", "New tab", Ctrl, K('T'));
+        Add("new tab|open new tab|open a new tab|open tab|open a tab|open our tab|open another tab|another tab|make a new tab|create new tab", "New tab", Ctrl, K('T'));
         Add("close tab|close this tab|close the tab|close current tab|close that tab|kill tab|close the current tab", "Closed tab", Ctrl, K('W'));
         Add("reopen tab|reopen the tab|reopen closed tab|reopen last tab|reopen the last tab|restore tab|restore the tab|restore closed tab|restore last tab|bring back tab|bring back the tab|bring back that tab|undo close tab|open closed tab|open last closed tab|reopen that tab", "Reopened tab", Ctrl, Shift, K('T'));
         Add("next tab|switch tab|go to next tab|tab right|move to next tab", "Next tab", Ctrl, Tab);
@@ -334,7 +347,7 @@ public static class CommandParser
             (m, _) => new Cmd("mic", m.Value.Contains("unmute") || m.Value.EndsWith(" on") ? "unmute" : "mute"));
         // ----- Discord -----
         // Whisper often writes "deafen" as "defend", "deaf in", "death in", "the fan".
-        Add(@"(?:un ?)?(?:deafen|deafin|deafan|defend|defen|deaf in|deaf and|death in|deafening)(?: me| myself| it)?(?: (?:in|on) discord)?|(?:toggle |turn (?:on|off) )?(?:deafen|deaf mode)|(?:deafen|defend) (?:me|myself)|(?:mute|turn off) (?:discord audio|discord sound|everyone|all voices)",
+        Add(@"(?:un ?)?(?:deafen|deafin|deafan|defend|defen|defin|defined|deaf in|deaf and|death in|deafening)(?: me| myself| it)?(?: (?:in|on) discord)?|(?:toggle |turn (?:on|off) )?(?:deafen|deaf mode)|(?:deafen|defend) (?:me|myself)|(?:mute|turn off) (?:discord audio|discord sound|everyone|all voices)",
             (_, _) => new Cmd("discord", "deafen"));
         Add(@"(?:leave|exit|quit)(?: the)? (?:voice|vc|voice chat|voice channel|call|channel|discord call)(?: (?:on|in) discord)?", (_, _) => new Cmd("hangup"));
         Add(@"join(?: (?:the|a|my))?(?: (.+?))?",
@@ -344,11 +357,15 @@ public static class CommandParser
                 return new Cmd("discord-join", Regex.Replace(ch, @"\s+", " "));
             });
         Add(@"(?:call|ring|voice call) (.+?) (?:on|in|via|using|through) discord|discord call (.+)", (m, _) => new Cmd("discord-call", First(m)));
+        Add(@"(?:open|go to|get in|get into|hop in|hop into|enter) (?:the )?(?:voice|vc|voice chat|voice channel)(?: (?:on|in) discord)?", (_, _) => new Cmd("discord-join", ""));
 
         // ----- WhatsApp -----
         Add(@"(?:video call|voice call|call|ring|phone|facetime) (.+?) (?:on|in|via|using|through) whatsapp|whatsapp (?:video |voice )?call (?:to )?(.+)",
             (m, _) => new Cmd("whatsapp-call", First(m), N: m.Value.Contains("video") ? 1 : 0));
         Add(@"(?:send|write|text|message|msg|whatsapp|ping|tell) .+", (_, o) => WhatsAppMessage(o));
+        // "call Abhishek" with no app: WhatsApp (it always asks first)
+        Add(@"(?:call|ring|phone|video call|voice call) (?!it\b|that\b|this\b|me\b|off\b|back\b|him\b|her\b|them\b)(.{2,30})",
+            (m, _) => new Cmd("whatsapp-call", m.Groups[1].Value, N: m.Value.StartsWith("video") ? 1 : 0));
 
         // ----- Claude -----
         Add(@"(?:ask|tell) claude.*|(?:new|start a new|start new|open a new|open new|start a) (?:claude )?(?:chat|session|conversation)(?: (?:in|on|with) claude)?.*",
@@ -360,7 +377,8 @@ public static class CommandParser
         Add(@"(?:play|start|put on|open and play)(?: (?:some|a|my|the))? (?:apple music|music app|the music app|itunes|spotify|my music)|(?:play|start|put on)(?: (?:some|a|any|my|the))? (?:song|songs|music|track)s? (?:on|in|from|with) (?:apple music|music|itunes|spotify|the music app)",
             (m, _) => new Cmd("play-app", m.Value.Contains("spotify") ? "spotify" : "apple music"));
         // "play believer on apple music": search Apple Music and play the first result.
-        Add(@"play (.+?) (?:on|in|from|with|using) (?:apple music|apple|apples music|app music|apple music app|music|itunes|i tunes|the music app)", (m, _) => new Cmd("applemusic", m.Groups[1].Value));
+        Add(@"play (.+?)(?: (?:from|in|on) (?:my )?(?:library|songs|music|collection|playlist))? (?:on|in|from|with|using) (?:apple music|apple|apples music|app music|apple music app|music|itunes|i tunes|the music app)(?: (?:from|in) (?:my )?(?:library|songs|music|collection))?|play (.+?) (?:from|in) my (?:library|songs|music|collection)",
+            (m, _) => new Cmd("applemusic", Regex.Replace(First(m), @"\s+(?:from|in|on) (?:my )?(?:library|songs|music|collection)$", "")));
 
         // ----- questions Jarvis answers itself -----
         Add(@"(?:whats|tell me|say) (?:the )?time(?: (?:now|right now|is it|it is))?|what time is it(?: now| right now)?|time(?: now| please| check)?|current time|what time it is|whats the time now|time right now",
@@ -394,6 +412,7 @@ public static class CommandParser
                 return secs is > 0 ? new Cmd("timer", "Timer", secs.Value) : null;
             });
         Add(@"(?:open |show |start |use )?(?:the )?(?:stopwatch|stop watch)", (_, _) => new Cmd("open", "clock", Say: "Clock"));
+        Add(@"(?:set|start|create|make)(?: me)? (?:a |an |the )?(?:timer|countdown|alarm)|timer", (_, _) => new Cmd("ask", "How long? Say \u201Cset a timer for 5 minutes\u201D"));
 
         // ----- volume -----
         Add($@"(?:(?:set|change|put|make|turn|adjust|bring) )?(?:the )?(?:volume|sound|audio)(?: level)?(?: (?:to|at|on))? {Num}(?: {Units})?|(?:volume|sound) {Num}(?: {Units})?",

@@ -122,6 +122,7 @@ public partial class ControlCenter : Window
     {
         RefreshJarvis();
         RefreshModes();
+        RefreshContacts();
         RefreshFocus();
         RefreshDeadlines();
         RefreshCalendar();
@@ -322,6 +323,63 @@ public partial class ControlCenter : Window
             row.Children.Add(label);
             StepList.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Card"), BorderThickness = new Thickness(0, at == 0 ? 0 : 1, 0, 0) });
         }
+    }
+
+    void RefreshContacts()
+    {
+        ContactList.Children.Clear();
+        if (S.WhatsAppContacts.Count == 0)
+        {
+            ContactList.Children.Add(new TextBlock
+            {
+                Text = "Add the people you message. Then say \u201Cmessage Abhishek saying I\u2019m on my way\u201D and Jarvis opens that chat and asks before sending.",
+                Style = (Style)FindResource("Sub"), Margin = new Thickness(14, 12, 14, 12), TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+        foreach (var c in S.WhatsAppContacts.ToList())
+        {
+            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE74D", ToolTip = "Delete", VerticalAlignment = VerticalAlignment.Center };
+            del.Click += (_, _) =>
+            {
+                S.WhatsAppContacts.Remove(c);
+                SettingsStore.Save();
+                RefreshContacts();
+            };
+            var text = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+            text.Children.Add(new TextBlock { Text = c.Name, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = "+" + c.Number, Style = (Style)FindResource("Sub") });
+            var row = new DockPanel { Margin = new Thickness(14, 10, 8, 10) };
+            DockPanel.SetDock(del, Dock.Right);
+            row.Children.Add(del);
+            row.Children.Add(text);
+            ContactList.Children.Add(new Border
+            {
+                Child = row, BorderBrush = ThemeService.Brush("Chip"),
+                BorderThickness = new Thickness(0, ContactList.Children.Count == 0 ? 0 : 1, 0, 0),
+            });
+        }
+    }
+
+    void ContactAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var name = ContactName.Text.Trim();
+        var number = WhatsApp.NormalizeNumber(ContactNumber.Text);
+        string? err = name.Length == 0 ? "Type their name, the way you\u2019ll say it"
+            : number == null ? "That number doesn\u2019t look right. Use 10 digits, or the full number with country code"
+            : null;
+        if (err != null)
+        {
+            ContactError.Text = err;
+            ContactError.Visibility = Visibility.Visible;
+            return;
+        }
+        ContactError.Visibility = Visibility.Collapsed;
+        S.WhatsAppContacts.RemoveAll(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        S.WhatsAppContacts.Add(new WhatsAppContact { Name = name, Number = number! });
+        SettingsStore.Save();
+        ContactName.Text = ContactNumber.Text = "";
+        RefreshContacts();
     }
 
     void StepAdd_Click(object sender, RoutedEventArgs e)

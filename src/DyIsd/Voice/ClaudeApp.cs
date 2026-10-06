@@ -54,7 +54,7 @@ public static class ClaudeApp
 
         if (newChat)
         {
-            var btn = AppDriver.WaitFor(win, new Regex(@"^(new chat|start new chat)$", I), 2000, ControlType.Button, ControlType.Hyperlink);
+            var btn = AppDriver.WaitFor(win, new Regex(@"^(new|new chat|start new chat)$", I), 2000, ControlType.Button, ControlType.Hyperlink);
             if (btn != null) { AppDriver.Activate(btn.Element); Thread.Sleep(900); }
             else Log.Write("claude sees buttons: " + AppDriver.Describe(win, 20, ControlType.Button, ControlType.Hyperlink));
             if (prompt.Length == 0) return btn != null ? "new" : "fail";

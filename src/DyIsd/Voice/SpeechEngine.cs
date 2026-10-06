@@ -133,7 +133,9 @@ public sealed class SpeechEngine : IDisposable
     /// <summary>Whisper's habits: bracketed sound tags and stray punctuation.</summary>
     static string Clean(string text)
     {
-        var t = System.Text.RegularExpressions.Regex.Replace(text, @"\[[^\]]*\]|\([^)]*\)", " ");
+        var t = System.Text.RegularExpressions.Regex.Replace(text, @"\[[^\]]*\]|\([^)]*\)|[®™©]", " ");
+        // Whisper sometimes loops on a word ("no no no no no…"): keep one.
+        t = System.Text.RegularExpressions.Regex.Replace(t, @"\b(\w+)(?:[\s,.!?]+\1\b){2,}[.!?]?", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return System.Text.RegularExpressions.Regex.Replace(t, @"\s+", " ").Trim();
     }
 

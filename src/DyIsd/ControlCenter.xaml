@@ -316,6 +316,20 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- whatsapp contacts: name → number, used by "message Abhishek saying …" -->
+                    <TextBlock Style="{StaticResource Section}" Text="WHATSAPP CONTACTS"/>
+                    <Border Background="{DynamicResource Card}" CornerRadius="16" ClipToBounds="True">
+                        <StackPanel x:Name="ContactList"/>
+                    </Border>
+                    <DockPanel Margin="0,8,0,0">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="+ Add" Margin="6,0,0,0" Click="ContactAdd_Click" VerticalAlignment="Center"/>
+                        <UniformGrid Columns="2">
+                            <TextBox x:Name="ContactName" Style="{StaticResource Field}" Tag="Name, e.g. Abhishek" MaxLength="40" Margin="0,0,3,0"/>
+                            <TextBox x:Name="ContactNumber" Style="{StaticResource Field}" Tag="Number, e.g. 98765 43210" MaxLength="20" Margin="3,0,0,0"/>
+                        </UniformGrid>
+                    </DockPanel>
+                    <TextBlock x:Name="ContactError" Style="{StaticResource Sub}" Foreground="{DynamicResource Orange}" Margin="2,6,0,0" Visibility="Collapsed"/>
+
                     <TextBlock Style="{StaticResource Section}" Text="POSITION"/>
                     <Border Background="{DynamicResource Card}" CornerRadius="12" Padding="3">
                         <UniformGrid x:Name="PosButtons" Columns="3"/>

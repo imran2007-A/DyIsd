@@ -70,6 +70,14 @@ public sealed class JarvisMode
     public bool CloseOnEnd { get; set; } = true;
 }
 
+/// <summary>A WhatsApp contact Jarvis can message: "message Abhishek saying hi".</summary>
+public sealed class WhatsAppContact
+{
+    public string Name { get; set; } = "";
+    /// <summary>With country code, e.g. 919876543210. A 10-digit number gets 91 added.</summary>
+    public string Number { get; set; } = "";
+}
+
 public sealed class AppSettings
 {
     /// <summary>"left", "center" or "right".</summary>
@@ -102,6 +110,8 @@ public sealed class AppSettings
     public List<JarvisPhrase> JarvisPhrases { get; set; } = new();
     /// <summary>Your modes ("Claude mode": open Claude, play my playlist…).</summary>
     public List<JarvisMode> JarvisModes { get; set; } = new();
+    /// <summary>People Jarvis can message or call on WhatsApp, by name.</summary>
+    public List<WhatsAppContact> WhatsAppContacts { get; set; } = new();
 }
 
 /// <summary>Loads and saves settings to %LOCALAPPDATA%\DyIsd\settings.json.</summary>
@@ -137,6 +147,7 @@ public static class SettingsStore
             if (p.Say.Trim().Length > 0 && !Current.JarvisModes.Exists(m => string.Equals(m.Name, p.Say, StringComparison.OrdinalIgnoreCase)))
                 Current.JarvisModes.Add(new JarvisMode { Name = p.Say.Trim(), Steps = { new ModeStep { Kind = "say", Value = p.Do } }, CloseOnEnd = false });
         Current.JarvisPhrases.Clear();
+        Current.WhatsAppContacts ??= new List<WhatsAppContact>();
         if (Current.JarvisKey == 0) { Current.JarvisKey = 0x20; Current.JarvisMods = 2; }
         Current.FocusMinutes = Math.Clamp(Current.FocusMinutes, 1, 180);
         if (Current.Position is not ("left" or "center" or "right")) Current.Position = "center";

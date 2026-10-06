@@ -435,7 +435,8 @@ const S={
   muted:false,dismissed:{},pref:null,prefPair:null,
   jarvis:{ready:false,dl:-1,on:true,pending:null,key:'Ctrl + Space',
     modes:[{name:'Claude mode',close:true,steps:[{k:'open',v:'Claude'},{k:'playlist',v:'Chill Vibes'},{k:'volume',v:'30'}]},
-           {name:'Lab mode',close:true,steps:[{k:'open',v:'VS Code'},{k:'open',v:'Chrome'},{k:'focus',v:'50'}]}]},
+           {name:'Lab mode',close:true,steps:[{k:'open',v:'VS Code'},{k:'open',v:'Chrome'},{k:'focus',v:'50'}]}],
+    contacts:[{name:'Rahul',num:'919876543210'}]},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
@@ -871,6 +872,11 @@ function renderCC(){
     <div class="add-row"><button class="pb" id="mdCancel" style="flex:1">Cancel</button><button class="go" id="mdSave" style="flex:1">Save mode</button></div>
   </div>`:`<button class="pb" id="mdNew" style="width:100%;margin-top:8px">+ New mode</button>`}
 
+  <h4>WhatsApp contacts</h4>
+  <div class="dl-list">${S.jarvis.contacts.length?S.jarvis.contacts.map((c,i)=>`<div class="dl-item" style="grid-template-columns:1fr auto;padding-left:14px"><div><b>${esc(c.name)}</b><span>+${esc(c.num)}</span></div><button class="del" data-delcontact="${i}" aria-label="Delete ${esc(c.name)}">${I.x}</button></div>`).join(''):'<div class="dl-empty">Add the people you message. Then say “message Abhishek saying I’m on my way”.</div>'}</div>
+  <div class="add-row" style="margin-top:8px"><input type="text" id="ctName" placeholder="Name, e.g. Abhishek" maxlength="40" style="flex:1;min-width:0" autocomplete="off"><input type="text" id="ctNum" placeholder="98765 43210" maxlength="20" style="flex:1;min-width:0" autocomplete="off" inputmode="tel"><button class="chip" id="ctAdd">+ Add</button></div>
+  <div class="preview" id="ctErr" style="color:#FF9F0A"></div>
+
   <h4>Position</h4>
   <div class="seg">${['left','center','right'].map(p=>`<button data-pos="${p}" aria-pressed="${S.pos===p}">${posMini(p)}${p[0].toUpperCase()+p.slice(1)}</button>`).join('')}</div>
 
@@ -965,6 +971,7 @@ cc.addEventListener('click',e=>{
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
   const rm=e.target.closest('[data-runmode]');if(rm){toggleCC(false);runMode(S.jarvis.modes[+rm.dataset.runmode]);return}
   const em=e.target.closest('[data-editmode]');if(em){const m=S.jarvis.modes[+em.dataset.editmode];ed={idx:+em.dataset.editmode,name:m.name,close:m.close,steps:m.steps.map(x=>({...x})),kind:'open'};renderCC();return}
+  const dc=e.target.closest('[data-delcontact]');if(dc){S.jarvis.contacts.splice(+dc.dataset.delcontact,1);renderCC();return}
   const dm=e.target.closest('[data-delmode]');if(dm){S.jarvis.modes.splice(+dm.dataset.delmode,1);ed=null;renderCC();return}
   const del=e.target.closest('[data-del]');if(del){S.deadlines=S.deadlines.filter(d=>d.id!==+del.dataset.del);renderDeadlines();return}
   const c=e.target.closest('[data-cc]');if(!c)return;
@@ -1111,8 +1118,10 @@ function jOne(orig){
   if(m=t.match(/^move (?:the )?island (?:to (?:the )?)?(left|right|center)$/)){setPos(m[1]);return{i:I.eye,t:'Moved '+m[1]}}
   if(m=t.match(/^close (.+)$/)){const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===m[1]);return k?{i:I.x,t:'Closed '+APPS[k].name}:{fail:1,i:I.x,c:'#FF9F0A',t:`“${m[1]}” isn't open`}}
   if(m=orig.match(/^(?:message|text|tell|whatsapp)\s+(\w+)(?: on whatsapp)?\s+(?:saying|that)\s+(.+)$/i)||orig.match(/^(?:message|text|whatsapp)\s+(\w+)\s+(.+)$/i)){
-    const who=m[1][0].toUpperCase()+m[1].slice(1);return{i:I.phone,c:'#25D366',t:`Send to ${who}? “${m[2].replace(/\.$/,'')}”`,yes:'jv-yes',no:'jv-no',confirm:`Sent to ${who}`}}
-  if(m=t.match(/^(video )?call (\w+) on whatsapp$/))return{i:I.phone,c:'#25D366',t:`${m[1]?'Video call':'Call'} ${m[2][0].toUpperCase()+m[2].slice(1)}?`,yes:'jv-yes',no:'jv-no',confirm:'Calling…'};
+    const sc=savedContact(m[1]);if(!sc)return{fail:1,i:I.phone,c:'#FF9F0A',t:`Couldn't find “${m[1]}”. Save their number in Control Center → WhatsApp contacts`};
+    return{i:I.phone,c:'#25D366',t:`Send to ${sc.name}? “${m[2].replace(/\.$/,'')}”`,yes:'jv-yes',no:'jv-no',confirm:`Sent to ${sc.name}`}}
+  if(m=t.match(/^(video )?call (\w+)(?: on whatsapp)?$/)){const sc=savedContact(m[2]);if(!sc)return{fail:1,i:I.phone,c:'#FF9F0A',t:`Couldn't find “${m[2]}”. Save their number in Control Center → WhatsApp contacts`};
+    return{i:I.phone,c:'#25D366',t:`${m[1]?'Video call':'Call'} ${sc.name}?`,yes:'jv-yes',no:'jv-no',confirm:'Calling…'}}
   if(m=t.match(/^call (\w+) on discord$/))return{i:I.phone,c:'#5865F2',t:`Call ${m[1]} on Discord?`,yes:'jv-yes',no:'jv-no',confirm:'Calling on Discord…'};
   if(m=orig.match(/^(?:ask|tell) claude(?: to| about)?\s*(.*?)(,? and send(?: it)?)?\.?$/i))return m[2]?{i:I.check,t:'Sent to Claude'}:{i:I.key,t:'Typed into Claude · say “send” or press Enter'};
   if(/^new claude chat/.test(t))return{i:I.key,t:'New Claude chat'};
@@ -1157,7 +1166,13 @@ function validStep(k,v){v=v.trim();if(!v)return'Fill in the box first';const n=+
   if(k==='focus')return n>=1&&n<=600?null:'Use minutes, 1 to 600';if(k==='wait')return n>=1&&n<=120?null:'Use seconds, 1 to 120';
   if(k==='theme')return/^(dark|light)$/i.test(v)?null:'Type dark or light';if(k==='wifi'||k==='bluetooth')return/^(on|off)$/i.test(v)?null:'Type on or off';return null}
 let ed=null;
+function normNum(t){let d=t.replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===11&&d[0]==='0')d=d.slice(1);if(d.length===10)d='91'+d;return d.length>=11&&d.length<=15?d:null}
+function savedContact(who){who=who.toLowerCase();return S.jarvis.contacts.find(c=>c.name.toLowerCase()===who||c.name.toLowerCase().split(' ').includes(who))}
 function wireModes(){
+  const ca=$('#ctAdd');if(ca)ca.addEventListener('click',()=>{const n=$('#ctName').value.trim(),num=normNum($('#ctNum').value);
+    const err=!n?'Type their name, the way you’ll say it':!num?'That number doesn’t look right. Use 10 digits, or the full number with country code':'';
+    if(err){$('#ctErr').textContent=err;return}
+    S.jarvis.contacts=S.jarvis.contacts.filter(c=>c.name.toLowerCase()!==n.toLowerCase());S.jarvis.contacts.push({name:n,num});renderCC()});
   const nb=$('#mdNew');if(nb)nb.addEventListener('click',()=>{ed={idx:-1,name:'',close:true,steps:[],kind:'open'};renderCC()});
   if(!ed)return;
   const nm=$('#mdName');nm.addEventListener('input',()=>{ed.name=nm.value});nm.addEventListener('change',renderCC);

@@ -216,6 +216,7 @@ public sealed class CommandRunner
                 _app.Timer.AddFive();
                 return Ok("\uE916", "+5 minutes");
             case "remind": return Remind(c);
+            case "ask": return new Reply("\uE897", "Accent", c.Text, Failed: true);
             case "remind-ask": return Bad($"When? Try \"remind me to {c.Text.ToLowerInvariant()} at 5 pm\"");
 
             // ---------------- calls ----------------

@@ -208,6 +208,8 @@ public sealed class JarvisService : IDisposable
                 }
                 Log.Write("jarvis heard: " + text);
                 text = text[cut..].Trim();
+                // "Jarvis. Jarvis." — said it twice: still just the name.
+                for (int c2; (c2 = WakeLength(text)) >= 0 && text.Length > 0; ) text = text[c2..].Trim();
                 if (IsNothing(text))
                 {
                     Arm("Yes?");
