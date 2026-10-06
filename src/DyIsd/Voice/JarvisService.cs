@@ -163,7 +163,31 @@ public sealed class JarvisService : IDisposable
         await HearAsync(samples, requireWake: !armed);
     }
 
-    static readonly Regex Wake = new(@"^\W*(?:(?:hey|hi|ok|okay|yo|oh|uh|um|so)\W+){0,2}(?:jarvis|jervis|javis|jarvas|jarves|jarvus|jarviss|charvis|jarbis|jaris|travis)\b[\s,.!?:;-]*", RegexOptions.IgnoreCase);
+    static readonly Regex Wake = new(@"^\W*(?:(?:hey|hi|ok|okay|yo|oh|uh|um|so)\W+){0,2}(?:jarvis|jervis|javis|jarvas|jarves|jarvus|jarviss|charvis|jarbis|jaris|travis|gervais|jarbus|jarvez)(?:['’]s)?\b[\s,.!?:;-]*", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Where the wake word ends in what was heard, or -1 if it isn't there. Whisper spells the
+    /// name many ways ("Jervis", "Javis", "Jarvis's"), so close spellings in the first three
+    /// words count too.
+    /// </summary>
+    static int WakeLength(string text)
+    {
+        var m = Wake.Match(text);
+        if (m.Success) return m.Length;
+        foreach (Match w in Regex.Matches(text, @"[A-Za-z']+"))
+        {
+            if (w.Index > 24) break; // only near the start
+            var word = w.Value.ToLowerInvariant().Replace("'s", "").Replace("'", "");
+            // Must sound like it: starts with j / g / ch / y / tr and has the "v" ("Paris" doesn't count).
+            if (word.Length is >= 5 and <= 8 && "jgcyt".Contains(word[0]) && word.Contains('v') && Fuzzy.Score(word, "jarvis") >= 0.66)
+            {
+                int end = w.Index + w.Length;
+                while (end < text.Length && !char.IsLetterOrDigit(text[end])) end++;
+                return end;
+            }
+        }
+        return -1;
+    }
 
     async Task HearAsync(float[] samples, bool requireWake)
     {
@@ -174,10 +198,16 @@ public sealed class JarvisService : IDisposable
             string text = await _speech.TranscribeAsync(samples);
             if (requireWake)
             {
-                var m = Wake.Match(text);
-                if (!m.Success) return; // just people talking
+                int cut = WakeLength(text);
+                if (cut < 0)
+                {
+                    // Just people talking. Log only what starts like a name, to tune the wake word.
+                    if (Regex.IsMatch(text, @"^\W*(?:\w+\W+){0,2}[jcgtdh]\w*[aeiou]\w*v", RegexOptions.IgnoreCase))
+                        Log.Write("jarvis ignored (no wake word): " + (text.Length > 60 ? text[..60] + "…" : text));
+                    return;
+                }
                 Log.Write("jarvis heard: " + text);
-                text = text[m.Length..].Trim();
+                text = text[cut..].Trim();
                 if (IsNothing(text))
                 {
                     Arm("Yes?");
@@ -188,8 +218,8 @@ public sealed class JarvisService : IDisposable
             else
             {
                 Log.Write("jarvis heard: " + text);
-                var m = Wake.Match(text);
-                if (m.Success) text = text[m.Length..].Trim();
+                int cut = WakeLength(text);
+                if (cut > 0) text = text[cut..].Trim();
             }
 
             if (IsNothing(text))

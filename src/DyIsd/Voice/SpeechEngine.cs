@@ -70,11 +70,20 @@ public sealed class SpeechEngine : IDisposable
     /// </summary>
     static string Prompt()
     {
-        // Whisper reads ~220 words of prompt; games and less common names go first.
-        var names = AppCatalog.SpokenNames(55);
-        return "Jarvis, open Spotify. Jarvis, search YouTube for lofi beats. Type hello and press enter. " +
+        // Whisper keeps only the last ~220 words of this, so the app names go first (some may be
+        // dropped) and the wake word and commands go last, where they're always kept.
+        var names = new List<string>();
+        int budget = 260; // characters of names
+        foreach (var n in AppCatalog.SpokenNames(40))
+        {
+            if (budget - n.Length < 0) break;
+            names.Add(n);
+            budget -= n.Length + 2;
+        }
+        return string.Join(", ", names) + ". " +
+               "Jarvis, open Spotify. Jarvis, search YouTube for lofi beats. Type hello and press enter. " +
                "Volume up. Max brightness. Dim the brightness. Close this tab. Scroll down. Play Believer on Apple Music. " +
-               "100 divided by 8. Open Prime Video. Turn off Bluetooth. Mute me. " + string.Join(", ", names) + ".";
+               "100 divided by 8. Open Prime Video. Turn off Bluetooth. Mute me. Jarvis, launch Fortnite. Jarvis.";
     }
 
     async Task DownloadAsync()
