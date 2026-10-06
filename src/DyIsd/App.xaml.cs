@@ -187,19 +187,17 @@ public partial class App : Application
         Transfers.ActiveChanged += c.Render;
         Transfers.Done += (title, file) => { if (S.Features.Transfers) c.ShowTransferDone(title, file); };
 
-        // Jarvis: hold Ctrl + Space to talk. The Space is swallowed so nothing gets typed.
+        // Jarvis: hold your Jarvis key (Ctrl + Space unless changed) to talk. The key is swallowed so
+        // nothing gets typed.
         KeyHook.Intercept = (vk, down) =>
         {
             if (!S.JarvisEnabled) return false;
-            if (vk == 0x20)
+            if (vk == S.JarvisKey)
             {
                 if (down)
                 {
                     if (_pttHeld) return true; // key repeat while held
-                    bool ctrl = (Win32.GetAsyncKeyState(Win32.VK_CONTROL) & 0x8000) != 0;
-                    bool others = (Win32.GetAsyncKeyState(Win32.VK_SHIFT) & 0x8000) != 0 || Win32.AltDown ||
-                                  (Win32.GetAsyncKeyState(Win32.VK_LWIN) & 0x8000) != 0;
-                    if (!ctrl || others) return false;
+                    if (Win32.CurrentModifiers() != S.JarvisMods) return false;
                     _pttHeld = true;
                     Dispatcher.BeginInvoke(Jarvis.PttDown);
                     return true;
@@ -209,8 +207,8 @@ public partial class App : Application
                 Dispatcher.BeginInvoke(Jarvis.PttUp);
                 return true;
             }
-            // Let go of Ctrl first: stop listening too.
-            if (!down && _pttHeld && vk is 0x11 or 0xA2 or 0xA3)
+            // Let go of a modifier first: stop listening too.
+            if (!down && _pttHeld && IsModifierOf(vk, S.JarvisMods))
             {
                 _pttHeld = false;
                 Dispatcher.BeginInvoke(Jarvis.PttUp);
@@ -273,6 +271,12 @@ public partial class App : Application
             return true;
         };
     }
+
+    static bool IsModifierOf(int vk, int mods) =>
+        ((mods & Win32.MOD_KEY_CTRL) != 0 && vk is 0x11 or 0xA2 or 0xA3) ||
+        ((mods & Win32.MOD_KEY_ALT) != 0 && vk is 0x12 or 0xA4 or 0xA5) ||
+        ((mods & Win32.MOD_KEY_SHIFT) != 0 && vk is 0x10 or 0xA0 or 0xA1) ||
+        ((mods & Win32.MOD_KEY_WIN) != 0 && vk is 0x5B or 0x5C);
 
     void OnIslandAction(string tag)
     {

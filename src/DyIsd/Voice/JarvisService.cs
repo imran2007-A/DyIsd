@@ -230,7 +230,7 @@ public sealed class JarvisService : IDisposable
     {
         _armedUntil = default;
         _armTimer.Stop();
-        var cmds = CommandParser.Parse(text, DateTime.Now);
+        var cmds = CommandParser.Parse(ExpandPhrases(text), DateTime.Now); // text stays what you said, for the island
 
         // Answering an "are you sure?"
         if (_pending != null)
@@ -258,6 +258,23 @@ public sealed class JarvisService : IDisposable
             return;
         }
         ShowReply(text, reply);
+    }
+
+    /// <summary>Your own phrases from the Control Center: "lab mode" → "open vs code and open chrome".</summary>
+    static string ExpandPhrases(string text)
+    {
+        var said = CommandParser.Norm(text);
+        foreach (var p in S.JarvisPhrases)
+        {
+            var mine = CommandParser.Norm(p.Say);
+            if (mine.Length == 0 || p.Do.Trim().Length == 0) continue;
+            if (said == mine || Fuzzy.Score(said, mine) >= 0.86)
+            {
+                Log.Write($"jarvis: your phrase \"{p.Say}\" → {p.Do}");
+                return p.Do;
+            }
+        }
+        return text;
     }
 
     /// <summary>The island's Yes / No buttons on a confirmation.</summary>

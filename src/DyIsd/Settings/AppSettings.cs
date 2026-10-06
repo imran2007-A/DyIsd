@@ -45,6 +45,14 @@ public sealed class ManualDeadline
     public DateTime Created { get; set; } = DateTime.Now;
 }
 
+public sealed class JarvisPhrase
+{
+    /// <summary>What you say, e.g. "lab mode".</summary>
+    public string Say { get; set; } = "";
+    /// <summary>What Jarvis does, written as you'd say it: "open vs code and open chrome and play apple music".</summary>
+    public string Do { get; set; } = "";
+}
+
 public sealed class AppSettings
 {
     /// <summary>"left", "center" or "right".</summary>
@@ -69,6 +77,12 @@ public sealed class AppSettings
     public bool JarvisWakeWord { get; set; } = true;
     /// <summary>Soft sounds when Jarvis starts listening and answers.</summary>
     public bool JarvisSounds { get; set; } = true;
+    /// <summary>Hold this key (with JarvisMods held too) to talk. Default Ctrl + Space.</summary>
+    public int JarvisKey { get; set; } = 0x20;
+    /// <summary>Win32.MOD_KEY_* flags that must be held with JarvisKey.</summary>
+    public int JarvisMods { get; set; } = 2;
+    /// <summary>Your own phrases: say one, Jarvis does the commands written next to it.</summary>
+    public List<JarvisPhrase> JarvisPhrases { get; set; } = new();
 }
 
 /// <summary>Loads and saves settings to %LOCALAPPDATA%\DyIsd\settings.json.</summary>
@@ -96,6 +110,8 @@ public static class SettingsStore
 
         Current.Features ??= new FeatureFlags();
         Current.ManualDeadlines ??= new List<ManualDeadline>();
+        Current.JarvisPhrases ??= new List<JarvisPhrase>();
+        if (Current.JarvisKey == 0) { Current.JarvisKey = 0x20; Current.JarvisMods = 2; }
         Current.FocusMinutes = Math.Clamp(Current.FocusMinutes, 1, 180);
         if (Current.Position is not ("left" or "center" or "right")) Current.Position = "center";
     }

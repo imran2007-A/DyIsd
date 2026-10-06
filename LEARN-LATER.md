@@ -60,6 +60,11 @@ at the file where it happens.
 - [ ] Pretending to be the keyboard and mouse (SendInput) → `Voice/InputSim.cs`
 - [ ] Catching Ctrl + Space system-wide and swallowing the Space → `App.xaml.cs` → `KeyHook.Intercept`
 - [ ] Making a sound wave in code (a WAV file is just numbers) → `Voice/Chime.cs`
+- [ ] Driving other apps like a person (find the box, type, press the button) → `Voice/AppDriver.cs`,
+      then see it used in `Voice/WhatsApp.cs`, `Services/DiscordControl.cs`, `Voice/ClaudeApp.cs`
+- [ ] Why WhatsApp asks before sending: confirm with the real name found, never guess → `WhatsApp.MessageAsync()`
+- [ ] Reading a web page without a browser (the top YouTube video) → `CommandRunner.YouTubePlayAsync()`
+- [ ] Your own phrases: settings + a lookup before parsing → `JarvisService.ExpandPhrases()`
 - [ ] Later, adding AI: "select, don't generate" (the AI picks one of these commands, it never
       runs anything it made up) → ask Claude when you get here
 

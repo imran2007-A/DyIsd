@@ -170,8 +170,37 @@ public sealed class CommandRunner
                 return _app.Ring.Answer() ? Good("\uE717", "Answered") : Bad("No call is ringing");
             case "decline":
                 return _app.Ring.Decline() ? new Reply("\uE778", "Bad", "Declined") : Bad("No call is ringing");
-            case "hangup":
-                return Bad("Hanging up comes in the next Jarvis update. Use the call window.");
+            case "hangup": return await HangUpAsync();
+            case "whatsapp-msg": return await WhatsApp.MessageAsync(c.Text, c.Say);
+            case "whatsapp-call": return await WhatsApp.CallAsync(c.Text, c.N == 1);
+            case "claude": return await ClaudeApp.AskAsync(c.Text, (c.N & 2) != 0, (c.N & 1) != 0);
+            case "discord":
+                {
+                    if (!Uia.Running(DiscordControl.Procs)) return Bad("Discord isn't open");
+                    bool ok = await Task.Run(DiscordControl.ToggleDeafen);
+                    if (!ok) return Bad("Couldn't find Discord's Deafen button");
+                    await Task.Delay(400);
+                    bool? deaf = await Task.Run(DiscordControl.IsDeafened);
+                    return Ok("\uE7F6", deaf == false ? "Undeafened" : "Deafened");
+                }
+            case "discord-join":
+                {
+                    if (!Uia.Running(DiscordControl.Procs)) return Bad("Discord isn't open");
+                    var joined = await Task.Run(() => DiscordControl.JoinVoice(c.Text));
+                    return joined != null ? Good("\uE717", "Joined " + joined)
+                        : Bad(c.Text.Length > 0 ? $"No voice channel called \"{c.Text}\" on this Discord screen" : "No voice channel on this Discord screen");
+                }
+            case "discord-call":
+                {
+                    if (!Uia.Running(DiscordControl.Procs)) return Bad("Discord isn't open");
+                    string who = c.Text;
+                    return new Reply("\uE717", "Good", $"Call {Title(who)} on Discord?", Confirm: async () =>
+                    {
+                        bool ok = await Task.Run(() => DiscordControl.CallUser(who));
+                        return ok ? Good("\uE717", $"Calling {Title(who)}") : Bad("Couldn't start the Discord call");
+                    });
+                }
+            case "yt-play": return await YouTubePlayAsync(c.Text);
             case "mic":
                 {
                     bool mute = c.Text == "mute";
@@ -495,6 +524,54 @@ public sealed class CommandRunner
         }
         if (!_app.Media.State.IsPlaying) await KeysAsync(() => InputSim.Combo(0xB3));
         return Ok("\uE768", "Playing " + Title(which));
+    }
+
+    /// <summary>Ends whatever call you're on, using that app's own hang-up button.</summary>
+    async Task<Reply> HangUpAsync()
+    {
+        var app = _app.Calls.App?.Name;
+        bool done = await Task.Run(() =>
+        {
+            if (app == "Discord" || (app == null && Uia.Running(DiscordControl.Procs) && DiscordControl.IsMuted() != null))
+                if (DiscordControl.Disconnect()) return true;
+            if (WhatsApp.HangUp()) return true;
+            // Teams, Zoom, Telegram: look for their Leave / Hang up button.
+            var procs = new[] { "ms-teams", "teams", "zoom", "telegram" };
+            foreach (var w in Uia.WindowsOf(procs))
+            {
+                var btn = AppDriver.All(w, new System.Text.RegularExpressions.Regex(@"^(leave|hang up|end call|end|leave call|end meeting)\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase), System.Windows.Automation.ControlType.Button).FirstOrDefault();
+                if (btn != null && AppDriver.Activate(btn.Element)) return true;
+            }
+            return false;
+        });
+        return done ? new Reply("\uE778", "Bad", "Hung up") : Bad("Couldn't find a call to end");
+    }
+
+    static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(6) };
+
+    /// <summary>"play believer": opens the top YouTube video for it, not just the search page.</summary>
+    static async Task<Reply> YouTubePlayAsync(string query)
+    {
+        string url = CommandParser.YouTube(query);
+        try
+        {
+            using var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
+            req.Headers.TryAddWithoutValidation("Accept-Language", "en-IN,en;q=0.9");
+            using var resp = await Http.SendAsync(req);
+            var html = resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync() : "";
+            var m = System.Text.RegularExpressions.Regex.Match(html, "\"videoRenderer\":\\{\"videoId\":\"([\\w-]{11})\"");
+            if (!m.Success) m = System.Text.RegularExpressions.Regex.Match(html, "\"videoId\":\"([\\w-]{11})\"");
+            if (m.Success) url = "https://www.youtube.com/watch?v=" + m.Groups[1].Value;
+            else Log.Write("youtube: no video id found, opening the search page");
+        }
+        catch (Exception ex)
+        {
+            Log.Write("youtube lookup: " + ex.Message);
+        }
+        Shell(url);
+        return Ok("\uE768", $"YouTube · {query}");
     }
 
     // ---------------- battery ----------------

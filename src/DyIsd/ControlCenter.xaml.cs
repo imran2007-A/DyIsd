@@ -55,6 +55,9 @@ public partial class ControlCenter : Window
         RefreshAll();
 
         NewTitle.TextChanged += (_, _) => UpdatePreview();
+        PhraseSay.TextChanged += (_, _) => PhraseAdd.IsEnabled = PhraseSay.Text.Trim().Length > 0 && PhraseDo.Text.Trim().Length > 0;
+        PhraseDo.TextChanged += (_, _) => PhraseAdd.IsEnabled = PhraseSay.Text.Trim().Length > 0 && PhraseDo.Text.Trim().Length > 0;
+        PhraseDo.KeyDown += (_, e) => { if (e.Key == Key.Enter && PhraseAdd.IsEnabled) PhraseAdd_Click(this, new RoutedEventArgs()); };
         NewTitle.KeyDown += (_, e) => { if (e.Key == Key.Enter && AddBtn.IsEnabled) Add_Click(this, new RoutedEventArgs()); };
         CustomTime.TextChanged += (_, _) =>
         {
@@ -117,6 +120,7 @@ public partial class ControlCenter : Window
     void RefreshAll()
     {
         RefreshJarvis();
+        RefreshPhrases();
         RefreshFocus();
         RefreshDeadlines();
         RefreshCalendar();
@@ -148,7 +152,8 @@ public partial class ControlCenter : Window
             JarvisBtn.Content = "Turn off";
             JarvisBtn.IsEnabled = true;
             string where = j.Runtime.Length == 0 ? "" : j.Runtime.Contains("Vulkan", StringComparison.OrdinalIgnoreCase) ? " · on your graphics card" : " · on the processor";
-            JarvisSub.Text = (S.JarvisWakeWord ? "Hold Ctrl + Space and talk, or say \u201CJarvis\u2026\u201D" : "Hold Ctrl + Space and talk") +
+            var key = KeyText(S.JarvisKey, S.JarvisMods);
+            JarvisSub.Text = (S.JarvisWakeWord ? $"Hold {key} and talk, or say \u201CJarvis\u2026\u201D" : $"Hold {key} and talk") +
                              ". Try \u201Copen chrome\u201D, \u201Cvolume 40\u201D, \u201Cremind me to study at 7\u201D." + where;
         }
         else
@@ -172,6 +177,57 @@ public partial class ControlCenter : Window
             SettingsStore.Save();
         }
         RefreshJarvis();
+    }
+
+    // ================= your Jarvis phrases =================
+
+    void RefreshPhrases()
+    {
+        PhraseList.Children.Clear();
+        if (S.JarvisPhrases.Count == 0)
+        {
+            PhraseList.Children.Add(new TextBlock
+            {
+                Text = "None yet. Teach Jarvis a shortcut: one phrase that does several things.",
+                Style = (Style)FindResource("Sub"), Margin = new Thickness(14, 12, 14, 12), TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+        foreach (var p in S.JarvisPhrases.ToList())
+        {
+            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE711", ToolTip = "Remove", VerticalAlignment = VerticalAlignment.Center };
+            del.Click += (_, _) =>
+            {
+                S.JarvisPhrases.Remove(p);
+                SettingsStore.Save();
+                RefreshPhrases();
+            };
+            var text = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+            text.Children.Add(new TextBlock { Text = $"\u201C{p.Say}\u201D", FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = "\u2192 " + p.Do, Style = (Style)FindResource("Sub"), TextWrapping = TextWrapping.Wrap });
+            var row = new DockPanel { Margin = new Thickness(14, 10, 8, 10) };
+            DockPanel.SetDock(del, Dock.Right);
+            row.Children.Add(del);
+            row.Children.Add(text);
+            PhraseList.Children.Add(new Border
+            {
+                Child = row, BorderBrush = ThemeService.Brush("Chip"),
+                BorderThickness = new Thickness(0, PhraseList.Children.Count == 0 ? 0 : 1, 0, 0),
+            });
+        }
+    }
+
+    void PhraseAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var say = PhraseSay.Text.Trim();
+        var doIt = PhraseDo.Text.Trim();
+        if (say.Length == 0 || doIt.Length == 0) return;
+        S.JarvisPhrases.RemoveAll(p => string.Equals(p.Say, say, StringComparison.OrdinalIgnoreCase));
+        S.JarvisPhrases.Add(new JarvisPhrase { Say = say, Do = doIt });
+        SettingsStore.Save();
+        PhraseSay.Text = PhraseDo.Text = "";
+        RefreshPhrases();
+        _app.Island?.ShowMessage("\uE73E", "Good", $"Say \u201C{say}\u201D to Jarvis", 280, 2200);
     }
 
     // ================= focus =================
@@ -677,6 +733,7 @@ public partial class ControlCenter : Window
             () => S.JarvisWakeWord, v => S.JarvisWakeWord = v);
         AddOption("Jarvis sounds", "A soft chime when it listens and when it's done.",
             () => S.JarvisSounds, v => S.JarvisSounds = v);
+        AddJarvisKeyOption();
 
         var startup = AddOption("Start with Windows", null, () => false, _ => { });
         startup.IsEnabled = false;
@@ -739,6 +796,73 @@ public partial class ControlCenter : Window
         row.Children.Add(btn);
         row.Children.Add(text);
         Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    /// <summary>Record the key you hold to talk to Jarvis. Escape puts back Ctrl + Space.</summary>
+    void AddJarvisKeyOption()
+    {
+        var btn = new Button { Style = (Style)FindResource("Btn"), Content = KeyText(S.JarvisKey, S.JarvisMods), VerticalAlignment = VerticalAlignment.Center, MinWidth = 90 };
+        bool listening = false;
+        btn.Click += (_, _) => { listening = true; btn.Content = "Press keys…"; btn.Focus(); };
+        btn.PreviewKeyDown += (_, e) =>
+        {
+            if (!listening) return;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            e.Handled = true;
+            // Right Alt or Right Ctrl on their own make good talk keys.
+            if (key is Key.RightAlt or Key.RightCtrl)
+            {
+                S.JarvisKey = KeyInterop.VirtualKeyFromKey(key);
+                S.JarvisMods = 0;
+            }
+            else if (key is Key.LeftCtrl or Key.LeftAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+            {
+                e.Handled = false;
+                return; // wait for the main key
+            }
+            else if (key == Key.Escape)
+            {
+                S.JarvisKey = 0x20;
+                S.JarvisMods = Native.Win32.MOD_KEY_CTRL;
+            }
+            else
+            {
+                int mods = Native.Win32.CurrentModifiers();
+                int vk = KeyInterop.VirtualKeyFromKey(key);
+                bool fKey = vk is >= 0x70 and <= 0x87;
+                if (mods == 0 && !fKey)
+                {
+                    btn.Content = "Add Ctrl or Alt";
+                    return; // a plain letter or Space alone would stop you typing it
+                }
+                S.JarvisKey = vk;
+                S.JarvisMods = mods;
+            }
+            listening = false;
+            SettingsStore.Save();
+            btn.Content = KeyText(S.JarvisKey, S.JarvisMods);
+        };
+        btn.LostFocus += (_, _) => { if (listening) { listening = false; btn.Content = KeyText(S.JarvisKey, S.JarvisMods); } };
+
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Jarvis key", FontSize = 13.5 });
+        text.Children.Add(new TextBlock { Text = "Hold it and talk. Ctrl + Space blocks VS Code's autocomplete; Right Alt is a good swap. Escape resets.", Style = (Style)FindResource("Sub"), TextWrapping = TextWrapping.Wrap });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(btn, Dock.Right);
+        row.Children.Add(btn);
+        row.Children.Add(text);
+        Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    static string KeyText(int vk, int m)
+    {
+        var parts = new List<string>();
+        if ((m & Native.Win32.MOD_KEY_CTRL) != 0) parts.Add("Ctrl");
+        if ((m & Native.Win32.MOD_KEY_ALT) != 0) parts.Add("Alt");
+        if ((m & Native.Win32.MOD_KEY_SHIFT) != 0) parts.Add("Shift");
+        if ((m & Native.Win32.MOD_KEY_WIN) != 0) parts.Add("Win");
+        parts.Add(vk switch { 0x20 => "Space", 0xA5 => "Right Alt", 0xA3 => "Right Ctrl", _ => KeyInterop.KeyFromVirtualKey(vk).ToString() });
+        return string.Join(" + ", parts);
     }
 
     static string ShortcutText()

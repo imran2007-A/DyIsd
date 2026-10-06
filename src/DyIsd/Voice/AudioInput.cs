@@ -17,7 +17,7 @@ public sealed class AudioInput : IDisposable
     const int FrameMs = 30, Frame = Rate * FrameMs / 1000;
     const int PreRollFrames = 10;   // keep 300 ms from before the phrase so the first word isn't cut
     const int StartFrames = 3;      // ~90 ms of sound starts a phrase
-    const int EndFrames = 23;       // ~700 ms of quiet ends it
+    const int EndFrames = 18;       // ~540 ms of quiet ends it
     const int MaxSamples = Rate * 10;
 
     /// <summary>A phrase heard while always listening.</summary>

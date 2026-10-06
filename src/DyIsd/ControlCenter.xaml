@@ -284,6 +284,19 @@
                     <UniformGrid x:Name="Tiles" Columns="2"/>
 
                     <!-- position -->
+                    <!-- your own Jarvis phrases -->
+                    <TextBlock Style="{StaticResource Section}" Text="YOUR JARVIS PHRASES"/>
+                    <Border Background="{DynamicResource Card}" CornerRadius="16" ClipToBounds="True">
+                        <StackPanel x:Name="PhraseList"/>
+                    </Border>
+                    <Border Background="{DynamicResource Card}" CornerRadius="16" Padding="12" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBox x:Name="PhraseSay" Style="{StaticResource Field}" Tag="When I say… e.g. lab mode" MaxLength="40"/>
+                            <TextBox x:Name="PhraseDo" Style="{StaticResource Field}" Tag="Jarvis does… e.g. open vs code and open chrome and play apple music" Margin="0,8,0,0" MaxLength="240"/>
+                            <Button x:Name="PhraseAdd" Style="{StaticResource BlueBtn}" Content="Add phrase" Margin="0,8,0,0" Click="PhraseAdd_Click" IsEnabled="False"/>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Style="{StaticResource Section}" Text="POSITION"/>
                     <Border Background="{DynamicResource Card}" CornerRadius="12" Padding="3">
                         <UniformGrid x:Name="PosButtons" Columns="3"/>

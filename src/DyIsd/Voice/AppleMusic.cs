@@ -40,8 +40,8 @@ public static class AppleMusic
         string result = await Task.Run(() => SearchAndPlay(win, query));
         return result switch
         {
-            "played" => CommandRunner.Ok("", $"Apple Music · {query}"),
-            "searched" => CommandRunner.Ok("", $"Searched Apple Music for \"{query}\". Pick one"),
+            "played" => CommandRunner.Ok("\uE768", $"Apple Music · {query}"),
+            "searched" => CommandRunner.Ok("\uE721", $"Searched Apple Music for \"{query}\". Pick one"),
             _ => CommandRunner.Bad("Couldn't find Apple Music's search box"),
         };
     }

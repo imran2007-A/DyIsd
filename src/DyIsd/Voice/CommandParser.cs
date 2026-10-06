@@ -41,6 +41,7 @@ public static class CommandParser
 
     static readonly Regex Splitter2 = new($@"(?:\s*,\s*(?:and\s+|then\s+)?|\s+(?:and\s+then|and|then|after\s+that|also)\s+)(?=(?:{Verbs})\b)", I);
     static readonly Regex TypeStart = new(@"^\s*(?:type|write|dictate)(?:\s+(?:out|down|in))?\b\s*[:,]?\s*", I);
+    static readonly Regex WholeStart = new(@"^\s*(?:(?:ask|tell)\s+claude\b|(?:send|write|text|message|msg|whatsapp|ping|tell)\b.*?\b(?:saying|that says|to say|that)\b)", I);
     static readonly Regex TypeTail = new(@"[\s,]*(?:(?:and|then|and\s+then)\s+)?(?:(?:press|hit)\s+(?:the\s+)?(?:enter|return)(?:\s+key)?|send\s+it|and\s+send|submit\s+it)[.!]?\s*$", I);
     static readonly Regex LeadFiller = new(@"^\s*(?:please|can\s+you|could\s+you|would\s+you|will\s+you|can\s+u|kindly|just|go\s+ahead\s+and|i\s+want\s+you\s+to|i\s+would\s+like\s+you\s+to|i'?d\s+like\s+you\s+to|i\s+need\s+you\s+to|hey|ok|okay|so|um+|uh+|now|quickly|jarvis)\b[\s,.]*", I);
     static readonly Regex TrailFiller = new(@"[\s,]*(?:please|for\s+me|right\s+now|now|thanks|thank\s+you|jarvis|quickly)[.!?]*\s*$", I);
@@ -70,6 +71,13 @@ public static class CommandParser
             var stripped = StripLead(rest);
             if (stripped.Length == 0) { parts.Add(rest); break; } // just "okay" / "jarvis": keep it
             rest = stripped;
+            if (WholeStart.IsMatch(rest))
+            {
+                // "ask Claude to …" and "message Rahul saying …": everything after is the text,
+                // even if it contains "and open…".
+                parts.Add(rest);
+                break;
+            }
             if (TypeStart.IsMatch(rest))
             {
                 // Everything after "type" is the text, except a final "and press enter".
@@ -323,14 +331,25 @@ public static class CommandParser
         Add(@"(?:hang up|end (?:the )?call|leave (?:the )?call|disconnect(?: the call)?|cut the call)", (_, _) => new Cmd("hangup"));
         Add(@"(?:mute|unmute|toggle mute on) (?:me|my mic|my microphone|the mic|the microphone|mic|microphone|myself|my voice)|(?:mute|unmute) (?:me )?(?:in|on) (?:the )?(?:call|discord|whatsapp|meeting)|mic (?:on|off)|microphone (?:on|off)",
             (m, _) => new Cmd("mic", m.Value.Contains("unmute") || m.Value.EndsWith(" on") ? "unmute" : "mute"));
-        Add(@"(?:deafen|undeafen)(?: me| myself)?(?: (?:in|on) discord)?", (m, _) => new Cmd("later", "Deafen in Discord comes in the next Jarvis update"));
+        // ----- Discord -----
+        Add(@"(?:deafen|undeafen|toggle deafen)(?: me| myself)?(?: (?:in|on) discord)?|(?:turn (?:on|off) )?deafen", (_, _) => new Cmd("discord", "deafen"));
+        Add(@"(?:leave|exit|quit)(?: the)? (?:voice|vc|voice chat|voice channel|call|channel|discord call)(?: (?:on|in) discord)?", (_, _) => new Cmd("hangup"));
+        Add(@"join(?: (?:the|a|my))?(?: (.+?))?",
+            (m, _) =>
+            {
+                var ch = Regex.Replace(" " + m.Groups[1].Value + " ", @"\b(voice|vc|chat|channel|call|room|on|in|and|at|discord|the|server)\b", " ").Trim();
+                return new Cmd("discord-join", Regex.Replace(ch, @"\s+", " "));
+            });
+        Add(@"(?:call|ring|voice call) (.+?) (?:on|in|via|using|through) discord|discord call (.+)", (m, _) => new Cmd("discord-call", First(m)));
 
-        // ----- messaging & Claude (next stages) -----
-        Add(@"(?:send|text|message|msg|whatsapp|ping) .+ (?:on|in|via|through|using) (?:whatsapp|whats app)|(?:send|text) (?:a )?(?:message|whatsapp|text) .+|whatsapp .+|message .+|text .+",
-            (_, _) => new Cmd("later", "WhatsApp messages come in the next Jarvis update"));
-        Add(@"(?:call|ring|phone|video call) .+ (?:on|in|via) (?:whatsapp|discord|teams)", (_, _) => new Cmd("later", "Starting calls comes in the next Jarvis update"));
-        Add(@"(?:ask|tell) (?:claude|chat gpt|chatgpt) .+|(?:new|start a new|start new|open a new) (?:claude )?(?:chat|session|conversation)(?: (?:in|on) claude)?",
-            (_, _) => new Cmd("later", "Claude sessions come in the next Jarvis update"));
+        // ----- WhatsApp -----
+        Add(@"(?:video call|voice call|call|ring|phone|facetime) (.+?) (?:on|in|via|using|through) whatsapp|whatsapp (?:video |voice )?call (?:to )?(.+)",
+            (m, _) => new Cmd("whatsapp-call", First(m), N: m.Value.Contains("video") ? 1 : 0));
+        Add(@"(?:send|write|text|message|msg|whatsapp|ping|tell) .+", (_, o) => WhatsAppMessage(o));
+
+        // ----- Claude -----
+        Add(@"(?:ask|tell) claude.*|(?:new|start a new|start new|open a new|open new|start a) (?:claude )?(?:chat|session|conversation)(?: (?:in|on|with) claude)?.*",
+            (_, o) => AskClaude(o));
         // "play apple music", "play a song from apple music": start the app and press play.
         Add(@"(?:play|start|put on|open and play)(?: (?:some|a|my|the))? (?:apple music|music app|the music app|itunes|spotify|my music)|(?:play|start|put on)(?: (?:some|a|any|my|the))? (?:song|songs|music|track)s? (?:on|in|from|with) (?:apple music|music|itunes|spotify|the music app)",
             (m, _) => new Cmd("play-app", m.Value.Contains("spotify") ? "spotify" : "apple music"));
@@ -416,11 +435,12 @@ public static class CommandParser
             (_, _) => new Cmd("media", "shuffle"));
         Add(@"(?:turn (?:on|off) |toggle |enable |disable )?(?:repeat|loop)(?: (?:on|off|mode|it|this|this song|the song|one|all|the track|this track))?|(?:put|play) (?:it|this|the song) on (?:repeat|loop)|play (?:it|this) again and again",
             (_, _) => new Cmd("media", "repeat"));
+        // "play believer": plays the top YouTube video (not just the search page).
         Add(@"play (.+?) (?:on|in|from|with|using) (?:youtube|yt)|(?:youtube|yt) play (.+)|play (.+)",
             (m, o) =>
             {
                 var q = First(m);
-                return q.Length == 0 ? null : new Cmd("url", YouTube(q), Say: $"YouTube · {q}");
+                return q.Length == 0 ? null : new Cmd("yt-play", q, Say: $"YouTube · {q}");
             });
 
         // ----- search -----
@@ -566,6 +586,51 @@ public static class CommandParser
         if (Regex.IsMatch(v, @"\b(a lot|much|more)\b")) return normal * 2;
         if (Regex.IsMatch(v, @"\b(little|bit|slightly|lil)\b")) return Math.Max(2, normal / 2);
         return normal;
+    }
+
+    // ---------------- WhatsApp & Claude (keep your exact words) ----------------
+
+    static readonly Regex[] MessageForms =
+    {
+        new(@"^(?:send|write)(?: an?)?(?: whatsapp)? (?:message|msg|text)(?: on whatsapp)? to (?<who>.+?)(?: on whatsapp| via whatsapp)?\s*(?:,\s*)?(?:saying|that says|that|telling (?:him|her|them)|to say)\s*[:,]?\s*(?<msg>.+)$", I),
+        new(@"^(?:message|text|msg|whatsapp|ping|tell)(?: to)? (?<who>.+?)(?: on whatsapp| via whatsapp| in whatsapp)?\s*(?:,\s*)?(?:saying|that says|that|to say|telling (?:him|her|them))\s*[:,]?\s*(?<msg>.+)$", I),
+        new(@"^send (?<msg>.+?) to (?<who>.+?) (?:on|via|in|through) whatsapp$", I),
+        new(@"^(?:message|text|whatsapp) (?<who>[A-Za-z]+)[,:]?\s+(?<msg>.{2,})$", I),
+    };
+
+    static Cmd? WhatsAppMessage(string orig)
+    {
+        var t = orig.Trim().TrimEnd('.', '!');
+        foreach (var re in MessageForms)
+        {
+            var m = re.Match(t);
+            if (!m.Success) continue;
+            var who = Regex.Replace(m.Groups["who"].Value, @"\s+(?:on|via|in) whatsapp$", "", I).Trim(' ', ',');
+            var msg = Regex.Replace(m.Groups["msg"].Value, @"\s+(?:on|via|in) whatsapp$", "", I).Trim();
+            if (who.Length == 0 || msg.Length == 0) continue;
+            if (Regex.IsMatch(who, @"^(me|us|claude|jarvis|you|him|her|them|everyone)$", I)) return null;
+            return new Cmd("whatsapp-msg", who, Say: msg);
+        }
+        return null;
+    }
+
+    /// <summary>"ask Claude to explain recursion and send it" → prompt, new chat?, send?</summary>
+    static Cmd? AskClaude(string orig)
+    {
+        var t = orig.Trim().TrimEnd('.', '!');
+        bool newChat = Regex.IsMatch(t, @"\bnew (?:claude )?(?:chat|session|conversation)\b", I);
+        bool send = false;
+        var tail = Regex.Match(t, @"[\s,]*(?:and|then|and then)\s+(?:send|submit)(?:\s+it)?$", I);
+        if (tail.Success) { send = true; t = t[..tail.Index]; }
+        var m = Regex.Match(t, @"^(?:ask|tell) claude(?: (?:in|on) a new (?:chat|conversation))?(?:\s*(?:to|about|that|,|:|whether|if))?\s*(?<p>.*)$", I);
+        string prompt = m.Success ? m.Groups["p"].Value.Trim() : "";
+        if (!m.Success)
+        {
+            // "new claude chat (and ask …)"
+            var rest = Regex.Match(t, @"(?:and |then )?(?:ask|tell)(?: it| claude)?(?: to| about)?\s*(?<p>.+)$", I);
+            if (rest.Success) prompt = rest.Groups["p"].Value.Trim();
+        }
+        return new Cmd("claude", prompt, N: (send ? 1 : 0) | (newChat ? 2 : 0));
     }
 
     // ---------------- web ----------------

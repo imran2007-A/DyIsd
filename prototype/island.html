@@ -428,7 +428,7 @@ const S={
   opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true,wake:true,jsounds:true},
   clock:{mode:'timer',t:300},ring:{app:'whatsapp',who:'Amma'},xfer:{title:'Sending · Bluetooth',file:'Resume_Imran.pdf',pct:0},
   muted:false,dismissed:{},pref:null,prefPair:null,
-  jarvis:{ready:false,dl:-1,on:true,pending:null},
+  jarvis:{ready:false,dl:-1,on:true,pending:null,key:'Ctrl + Space',phrases:[{say:'lab mode',do:'open vs code and open chrome and play apple music'}]},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
@@ -811,7 +811,7 @@ function renderCC(){
 
   <div class="jv-card" style="margin-bottom:8px">
     <div class="orb lg"><div class="ic">${I.mic}</div></div>
-    <div><div class="lbl">Jarvis</div><div class="t2" style="white-space:normal">${S.jarvis.dl>=0?'Downloading its ears (470 MB, one time)…':!S.jarvis.ready?'Voice control, no AI, nothing leaves this laptop. Needs a one-time 470 MB download.':S.jarvis.on?(S.opt.wake?'Hold Ctrl + Space and talk, or say “Jarvis…”':'Hold Ctrl + Space and talk')+' · on your graphics card':'Off. Ctrl + Space types a space like normal.'}</div></div>
+    <div><div class="lbl">Jarvis</div><div class="t2" style="white-space:normal">${S.jarvis.dl>=0?'Downloading its ears (470 MB, one time)…':!S.jarvis.ready?'Voice control, no AI, nothing leaves this laptop. Needs a one-time 470 MB download.':S.jarvis.on?(S.opt.wake?`Hold ${S.jarvis.key} and talk, or say “Jarvis…”`:`Hold ${S.jarvis.key} and talk`)+' · on your graphics card':'Off. Ctrl + Space types a space like normal.'}</div></div>
     <button class="pb ${S.jarvis.on||!S.jarvis.ready?'w':''}" data-cc="jarvis" ${S.jarvis.dl>=0?'disabled':''}>${S.jarvis.dl>=0?Math.round(S.jarvis.dl)+'%':!S.jarvis.ready?'Get it':S.jarvis.on?'Turn off':'Turn on'}</button>
   </div>
 
@@ -850,16 +850,31 @@ function renderCC(){
   <h4>Show on the island</h4>
   <div class="tiles">${TILES.map(([k,n,ic,c])=>`<button class="tile" data-tile="${k}" aria-pressed="${on(k)}" style="--tc:${c}"><span class="ti">${ic}</span><span><span class="tn">${n}</span><br><span class="ts">${on(k)?'On':'Off'}</span></span></button>`).join('')}</div>
 
+  <h4>Your Jarvis phrases</h4>
+  <div class="dl-list">${S.jarvis.phrases.length?S.jarvis.phrases.map((p,i)=>`<div class="dl-item" style="grid-template-columns:1fr auto;padding-left:14px"><div><b>“${esc(p.say)}”</b><span>→ ${esc(p.do)}</span></div><button class="del" data-delph="${i}" aria-label="Remove ${esc(p.say)}">${I.x}</button></div>`).join(''):'<div class="dl-empty">None yet. Teach Jarvis a shortcut: one phrase that does several things.</div>'}</div>
+  <div class="add"><input type="text" id="phSay" placeholder="When I say… e.g. lab mode" maxlength="40" autocomplete="off"><input type="text" id="phDo" placeholder="Jarvis does… e.g. open vs code and open chrome" maxlength="240" autocomplete="off"><button class="go" id="phAdd">Add phrase</button></div>
+
   <h4>Position</h4>
   <div class="seg">${['left','center','right'].map(p=>`<button data-pos="${p}" aria-pressed="${S.pos===p}">${posMini(p)}${p[0].toUpperCase()+p.slice(1)}</button>`).join('')}</div>
 
   <h4>Options</h4>
   <div class="opts">${OPTS.slice(0,3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
+    ${OPTS.slice(3,5).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
+    <div class="opt"><span class="on-l"><b>Jarvis key</b><span>Hold it and talk. Ctrl + Space blocks VS Code's autocomplete; Right Alt is a good swap. Escape resets.</span></span><button class="kbd-btn" id="jkBtn">${esc(S.jarvis.key)}</button></div>
     <div class="opt"><span class="on-l"><b>Discord mute shortcut</b><span>Same keys as in Discord. The island shows when you're muted. Backspace clears it.</span></span><button class="kbd-btn" id="kbdBtn">${S.discordKey||'Set'}</button></div>
-    ${OPTS.slice(3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
+    ${OPTS.slice(5).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
 
   <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="logs">Log folder</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
   renderDeadlines();wireAdd();
+  $('#phAdd').addEventListener('click',()=>{const a=$('#phSay').value.trim(),b=$('#phDo').value.trim();if(!a||!b)return;S.jarvis.phrases=S.jarvis.phrases.filter(p=>p.say.toLowerCase()!==a.toLowerCase());S.jarvis.phrases.push({say:a,do:b});renderCC();pop('msg',{i:I.check,c:'#30D158',t:`Say “${a}” to Jarvis`,w:260},2000)});
+  const jk=$('#jkBtn');jk.addEventListener('click',()=>{jk.textContent='Press keys…';jk.classList.add('listen');
+    const on=e=>{if(['Control','Shift','Meta'].includes(e.key)||(e.key==='Alt'&&e.code!=='AltRight'))return;e.preventDefault();
+      if(e.key==='Escape')S.jarvis.key='Ctrl + Space';
+      else if(e.code==='AltRight')S.jarvis.key='Right Alt';
+      else{const k=[e.ctrlKey&&'Ctrl',e.altKey&&'Alt',e.shiftKey&&'Shift',e.metaKey&&'Win',e.code==='Space'?'Space':e.key.length===1?e.key.toUpperCase():e.key].filter(Boolean);
+        if(k.length<2&&!/^F\d+$/.test(k[0])){jk.textContent='Add Ctrl or Alt';return}S.jarvis.key=k.join(' + ')}
+      jk.textContent=S.jarvis.key;jk.classList.remove('listen');window.removeEventListener('keydown',on,true);renderCC()};
+    window.addEventListener('keydown',on,true)});
   const kb=$('#kbdBtn');kb.addEventListener('click',()=>{kb.textContent='Press keys…';kb.classList.add('listen');
     const on=e=>{if(['Control','Alt','Shift','Meta'].includes(e.key))return;e.preventDefault();
       if(e.key==='Backspace'||e.key==='Escape')S.discordKey='';
@@ -931,6 +946,7 @@ cc.addEventListener('click',e=>{
     save();renderCC();render();return}
   const p=e.target.closest('[data-pos]');if(p){setPos(p.dataset.pos);return}
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
+  const dp=e.target.closest('[data-delph]');if(dp){S.jarvis.phrases.splice(+dp.dataset.delph,1);renderCC();return}
   const del=e.target.closest('[data-del]');if(del){S.deadlines=S.deadlines.filter(d=>d.id!==+del.dataset.del);renderDeadlines();return}
   const c=e.target.closest('[data-cc]');if(!c)return;
   switch(c.dataset.cc){
@@ -1054,7 +1070,7 @@ function jOne(orig){
   if(/^play (?:a |some |the )?(?:apple music|songs? (?:on|from|in) apple music)$/.test(t)){trig('spotify');return{i:I.music,t:'Playing Apple Music'}}
   if(m=t.match(/^play (.+?) (?:on|in|from) apple music$/)){trig('spotify');return{i:I.music,t:`Apple Music · ${m[1]}`}}
   if(m=t.match(/^(?:open|watch) (.+?) on (prime video|netflix|hotstar|youtube)$/))return{i:I.globe,t:`${m[2].replace(/\b\w/g,c=>c.toUpperCase())} · ${m[1]}`};
-  if(m=t.match(/^play (.+?)(?: on youtube)?$/))return{i:I.globe,t:`YouTube · ${m[1]}`};
+  if(m=t.match(/^play (.+?)(?: on youtube)?$/)){S.media.app='chrome';S.media.playing=true;S.pausedHere=false;startAct('media','chrome');render();return{i:I.play,t:`YouTube · ${m[1]} (top video)`}}
   if(m=t.match(/^(?:search|look up|find) (?:for )?(.+?) (?:on|in) (youtube|amazon|flipkart|wikipedia|github|maps|reddit|stack overflow|leetcode|spotify|google)$/)||t.match(/^(?:search) (youtube|amazon|flipkart|wikipedia|github|reddit|leetcode|spotify) for (.+)$/)){
     const [q,site]=SEARCH[m[2]]?[m[1],m[2]]:[m[2],m[1]];return{i:I.globe,t:`${SEARCH[site]} · ${q}`}}
   if(m=t.match(/^(?:search|google|look up)(?: for)? (.+)$/))return{i:I.globe,t:`Google · ${m[1]}`};
@@ -1074,8 +1090,16 @@ function jOne(orig){
   if(/^(hide|minimi[sz]e) (the )?island$/.test(t)){setTimeout(()=>{S.paused=true;render();renderCC()},1800);return{i:I.eye,t:'Hiding the island. Tray icon brings it back.'}}
   if(m=t.match(/^move (?:the )?island (?:to (?:the )?)?(left|right|center)$/)){setPos(m[1]);return{i:I.eye,t:'Moved '+m[1]}}
   if(m=t.match(/^close (.+)$/)){const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===m[1]);return k?{i:I.x,t:'Closed '+APPS[k].name}:{fail:1,i:I.x,c:'#FF9F0A',t:`“${m[1]}” isn't open`}}
-  if(/^(message|text|send) /.test(t)||/ on whatsapp$/.test(t))return{fail:1,i:I.clock,c:'#BF5AF2',t:'WhatsApp messages come in the next Jarvis update'};
-  if(/^ask claude/.test(t))return{fail:1,i:I.clock,c:'#BF5AF2',t:'Claude sessions come in the next Jarvis update'};
+  if(m=orig.match(/^(?:message|text|tell|whatsapp)\s+(\w+)(?: on whatsapp)?\s+(?:saying|that)\s+(.+)$/i)||orig.match(/^(?:message|text|whatsapp)\s+(\w+)\s+(.+)$/i)){
+    const who=m[1][0].toUpperCase()+m[1].slice(1);return{i:I.phone,c:'#25D366',t:`Send to ${who}? “${m[2].replace(/\.$/,'')}”`,yes:'jv-yes',no:'jv-no',confirm:`Sent to ${who}`}}
+  if(m=t.match(/^(video )?call (\w+) on whatsapp$/))return{i:I.phone,c:'#25D366',t:`${m[1]?'Video call':'Call'} ${m[2][0].toUpperCase()+m[2].slice(1)}?`,yes:'jv-yes',no:'jv-no',confirm:'Calling…'};
+  if(m=t.match(/^call (\w+) on discord$/))return{i:I.phone,c:'#5865F2',t:`Call ${m[1]} on Discord?`,yes:'jv-yes',no:'jv-no',confirm:'Calling on Discord…'};
+  if(m=orig.match(/^(?:ask|tell) claude(?: to| about)?\s*(.*?)(,? and send(?: it)?)?\.?$/i))return m[2]?{i:I.check,t:'Sent to Claude'}:{i:I.key,t:'Typed into Claude · say “send” or press Enter'};
+  if(/^new claude chat/.test(t))return{i:I.key,t:'New Claude chat'};
+  if(/^(un)?deafen/.test(t))return{i:I.head,c:'#5865F2',t:t.startsWith('un')?'Undeafened':'Deafened'};
+  if(m=t.match(/^join(?: the)? ?(.*?)(?: voice)?(?: chat| channel)?(?: on discord)?$/)){const ch=m[1].replace(/\b(voice|chat|channel|discord|and|on)\b/g,'').trim()||'General';
+    S.call={app:'discord',who:'DyIsd Squad',since:Date.now(),muted:false};startAct('call','discord');render();return{i:I.phone,c:'#30D158',t:'Joined '+ch[0].toUpperCase()+ch.slice(1)}}
+  if(/^(hang up|end (the )?call|leave (the )?(call|voice( channel| chat)?)|disconnect)$/.test(t)){if(!S.acts.call)return{fail:1,i:I.phone,c:'#FF9F0A',t:'Couldn\'t find a call to end'};stopAct('call');render();return{i:I.hang,c:'#FF453A',t:'Hung up'}}
   m=t.match(/^(?:open|launch|start|switch to|go to) (?:the )?(.+?)(?: app)?$/)||t.match(/^(\w+(?: \w+)?)$/);
   if(m){const name=m[1].replace(/^vs code$/,'vs code');const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===name||k===name.replace(/\s/g,''));
     if(k){jumpTo(k);return{i:I.open,t:APPS[k].name}}
@@ -1093,7 +1117,8 @@ function jarvisSay(text,instant){
     const lower=text.toLowerCase().replace(/[.!]/g,'').trim();
     if(p&&/^(yes|yeah|sure|do it|confirm)$/.test(lower)){jReply({i:I.check,c:'#30D158',t:p},text);return}
     if(p&&/^(no|cancel|never ?mind)$/.test(lower)){jReply({i:I.x,t:'Cancelled'},text);return}
-    const parts=jSplit(text);let last=null;const labels=[];
+    const mine=S.jarvis.phrases.find(p=>p.say.toLowerCase()===lower);
+    const parts=jSplit(mine?mine.do:text);let last=null;const labels=[];
     for(const part of parts){const r=jOne(part);last=r;if(r.fail||r.yes)break;if(!r.silent)labels.push(r.t)}
     if(last.yes)S.jarvis.pending=last.confirm;
     if(!last.fail&&!last.yes&&labels.length>1)last={...last,t:labels.slice(-3).join(' · ')};
@@ -1127,7 +1152,7 @@ window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.ctrlKey&&!e.altKey&
 window.addEventListener('keyup',e=>{if(holding&&(e.code==='Space'||e.key==='Control'))holdEnd()});
 jvText.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();jarvisSay(jvText.value,true)}});
 const CHIPS=['open chrome and search for cats','volume 30','next song','set a timer for 2 minutes','remind me to submit DBMS at 5 pm',"what's 15 percent of 2400",
-  'mute','play believer on apple music','watch friends on prime video','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
+  'mute','play believer on apple music','message Rahul saying I\'m late','ask Claude to explain recursion','lab mode','deafen','watch friends on prime video','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
 $('#jvChips').innerHTML=CHIPS.map(c=>`<button class="btn" data-say="${esc(c)}">${esc(c)}</button>`).join('');
 $('#jvChips').addEventListener('click',e=>{const b=e.target.closest('[data-say]');if(b){jvText.value=b.dataset.say;jarvisSay(b.dataset.say,true)}});
 

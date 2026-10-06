@@ -33,6 +33,8 @@ public sealed class CallService
     readonly MicService _mic;
     readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly DispatcherTimer _meter = new() { Interval = TimeSpan.FromMilliseconds(60) };
+    readonly DispatcherTimer _discordSync = new() { Interval = TimeSpan.FromSeconds(2) };
+    bool _syncing;
     bool _weMutedMic;
 
     public CallService(PrivacyService privacy, MicService mic)
@@ -42,6 +44,18 @@ public sealed class CallService
         _privacy.Changed += Check;
         _mic.MuteChanged += muted => { if (App != null && App.Name != "Discord") State.Muted = muted; };
         _clock.Tick += (_, _) => Tick();
+        // In a Discord call, read Discord's own Mute button so the island always matches it.
+        _discordSync.Tick += async (_, _) =>
+        {
+            if (_syncing || App?.Name != "Discord") return;
+            _syncing = true;
+            try
+            {
+                var muted = await System.Threading.Tasks.Task.Run(DiscordControl.IsMuted);
+                if (muted != null && App?.Name == "Discord") State.Muted = muted.Value;
+            }
+            finally { _syncing = false; }
+        };
         _meter.Tick += (_, _) => State.Level = State.Muted ? 0 : Math.Min(1, _mic.Level * 2.2);
     }
 
@@ -66,6 +80,7 @@ public sealed class CallService
         Tick();
         _clock.Start();
         _meter.Start();
+        if (app.Name == "Discord") _discordSync.Start();
         State.IsActive = true;
         Log.Write($"call started: {app.Name} ({State.Who})");
         ActiveChanged?.Invoke();
@@ -77,6 +92,7 @@ public sealed class CallService
         App = null;
         _clock.Stop();
         _meter.Stop();
+        _discordSync.Stop();
         State.IsActive = false;
         State.Muted = false;
         // Never leave your mic muted after a call because of the island.
@@ -93,16 +109,18 @@ public sealed class CallService
     }
 
     /// <summary>
-    /// Mute button on the island. In Discord (with your shortcut set) it presses your Discord mute
-    /// shortcut so Discord shows it too; everywhere else it mutes your mic for the whole PC.
+    /// Mute button on the island. In Discord it presses Discord's own Mute button (or your Discord
+    /// shortcut if the button can't be found); everywhere else it mutes your mic for the whole PC.
     /// </summary>
-    public void ToggleMute(int discordKey, int discordMods)
+    public async void ToggleMute(int discordKey, int discordMods)
     {
         if (App == null) return;
-        if (App.Name == "Discord" && discordKey != 0)
+        if (App.Name == "Discord")
         {
-            Win32.PressShortcut(discordMods, discordKey);
-            State.Muted = !State.Muted;
+            // Press Discord's own Mute button; your shortcut is the fallback.
+            bool pressed = await System.Threading.Tasks.Task.Run(DiscordControl.ToggleMute);
+            if (!pressed && discordKey != 0) Win32.PressShortcut(discordMods, discordKey);
+            if (pressed || discordKey != 0) State.Muted = !State.Muted;
             return;
         }
         bool mute = !_mic.Muted;
