@@ -230,7 +230,13 @@ public sealed class JarvisService : IDisposable
     {
         _armedUntil = default;
         _armTimer.Stop();
-        var cmds = CommandParser.Parse(ExpandPhrases(text), DateTime.Now); // text stays what you said, for the island
+        // One of your modes? ("Claude mode", "end Claude mode")
+        if (_pending == null && Modes.Match(text, S.JarvisModes) is var (mode, end))
+        {
+            ShowReply(text, end ? await _runner.EndModeAsync(mode) : await RunModeAsync(mode));
+            return;
+        }
+        var cmds = CommandParser.Parse(text, DateTime.Now);
 
         // Answering an "are you sure?"
         if (_pending != null)
@@ -260,21 +266,26 @@ public sealed class JarvisService : IDisposable
         ShowReply(text, reply);
     }
 
-    /// <summary>Your own phrases from the Control Center: "lab mode" → "open vs code and open chrome".</summary>
-    static string ExpandPhrases(string text)
+    /// <summary>Runs a mode, showing each step on the island as it goes.</summary>
+    async Task<Reply> RunModeAsync(JarvisMode mode)
     {
-        var said = CommandParser.Norm(text);
-        foreach (var p in S.JarvisPhrases)
+        Log.Write($"jarvis: mode \"{mode.Name}\"");
+        return await _runner.RunModeAsync(mode, step =>
         {
-            var mine = CommandParser.Norm(p.Say);
-            if (mine.Length == 0 || p.Do.Trim().Length == 0) continue;
-            if (said == mine || Fuzzy.Score(said, mine) >= 0.86)
-            {
-                Log.Write($"jarvis: your phrase \"{p.Say}\" → {p.Do}");
-                return p.Do;
-            }
-        }
-        return text;
+            State.Text = step;
+            State.IsListening = false;
+            _island.ShowJarvis(State);
+        });
+    }
+
+    /// <summary>The ▶ button next to a mode in the Control Center.</summary>
+    public async void StartMode(JarvisMode mode)
+    {
+        if (_busy) return;
+        _busy = true;
+        try { ShowReply("", await RunModeAsync(mode)); }
+        catch (Exception ex) { Log.Error("mode", ex); }
+        finally { _busy = false; }
     }
 
     /// <summary>The island's Yes / No buttons on a confirmation.</summary>

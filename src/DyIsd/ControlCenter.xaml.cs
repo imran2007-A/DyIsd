@@ -14,6 +14,7 @@ using System.Windows.Threading;
 using DyIsd.Controls;
 using DyIsd.Services;
 using DyIsd.Settings;
+using DyIsd.Voice;
 
 namespace DyIsd;
 
@@ -55,9 +56,9 @@ public partial class ControlCenter : Window
         RefreshAll();
 
         NewTitle.TextChanged += (_, _) => UpdatePreview();
-        PhraseSay.TextChanged += (_, _) => PhraseAdd.IsEnabled = PhraseSay.Text.Trim().Length > 0 && PhraseDo.Text.Trim().Length > 0;
-        PhraseDo.TextChanged += (_, _) => PhraseAdd.IsEnabled = PhraseSay.Text.Trim().Length > 0 && PhraseDo.Text.Trim().Length > 0;
-        PhraseDo.KeyDown += (_, e) => { if (e.Key == Key.Enter && PhraseAdd.IsEnabled) PhraseAdd_Click(this, new RoutedEventArgs()); };
+        BuildKindChips();
+        StepValue.KeyDown += (_, e) => { if (e.Key == Key.Enter) StepAdd_Click(this, new RoutedEventArgs()); };
+        ModeName.TextChanged += (_, _) => UpdateModeHint();
         NewTitle.KeyDown += (_, e) => { if (e.Key == Key.Enter && AddBtn.IsEnabled) Add_Click(this, new RoutedEventArgs()); };
         CustomTime.TextChanged += (_, _) =>
         {
@@ -120,7 +121,7 @@ public partial class ControlCenter : Window
     void RefreshAll()
     {
         RefreshJarvis();
-        RefreshPhrases();
+        RefreshModes();
         RefreshFocus();
         RefreshDeadlines();
         RefreshCalendar();
@@ -179,55 +180,195 @@ public partial class ControlCenter : Window
         RefreshJarvis();
     }
 
-    // ================= your Jarvis phrases =================
+    // ================= modes =================
 
-    void RefreshPhrases()
+    JarvisMode? _editing;           // the mode being edited (null = a new one)
+    readonly List<ModeStep> _steps = new();
+    string _kind = "open";
+
+    void RefreshModes()
     {
-        PhraseList.Children.Clear();
-        if (S.JarvisPhrases.Count == 0)
+        ModeList.Children.Clear();
+        if (S.JarvisModes.Count == 0)
         {
-            PhraseList.Children.Add(new TextBlock
+            ModeList.Children.Add(new TextBlock
             {
-                Text = "None yet. Teach Jarvis a shortcut: one phrase that does several things.",
+                Text = "No modes yet. A mode runs several things at once: say \u201CClaude mode\u201D and it opens Claude, plays your playlist, sets the volume\u2026",
                 Style = (Style)FindResource("Sub"), Margin = new Thickness(14, 12, 14, 12), TextWrapping = TextWrapping.Wrap,
             });
             return;
         }
-        foreach (var p in S.JarvisPhrases.ToList())
+        foreach (var m in S.JarvisModes.ToList())
         {
-            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE711", ToolTip = "Remove", VerticalAlignment = VerticalAlignment.Center };
+            var run = new Button { Style = (Style)FindResource("WhiteBtn"), Content = "\u25B6", ToolTip = "Start it now", VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(11, 5, 11, 5) };
+            run.Click += (_, _) => { Close(); _app.Jarvis.StartMode(m); };
+            var edit = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE70F", ToolTip = "Edit", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+            edit.Click += (_, _) => OpenEditor(m);
+            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE74D", ToolTip = "Delete", VerticalAlignment = VerticalAlignment.Center };
             del.Click += (_, _) =>
             {
-                S.JarvisPhrases.Remove(p);
+                S.JarvisModes.Remove(m);
                 SettingsStore.Save();
-                RefreshPhrases();
+                if (_editing == m) CloseEditor();
+                RefreshModes();
             };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            buttons.Children.Add(run);
+            buttons.Children.Add(edit);
+            buttons.Children.Add(del);
+
             var text = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-            text.Children.Add(new TextBlock { Text = $"\u201C{p.Say}\u201D", FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
-            text.Children.Add(new TextBlock { Text = "\u2192 " + p.Do, Style = (Style)FindResource("Sub"), TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = m.Name, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock
+            {
+                Text = string.Join(" \u00B7 ", m.Steps.Select(Modes.Describe)), Style = (Style)FindResource("Sub"),
+                TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, TextWrapping = TextWrapping.Wrap,
+            });
             var row = new DockPanel { Margin = new Thickness(14, 10, 8, 10) };
-            DockPanel.SetDock(del, Dock.Right);
-            row.Children.Add(del);
+            DockPanel.SetDock(buttons, Dock.Right);
+            row.Children.Add(buttons);
             row.Children.Add(text);
-            PhraseList.Children.Add(new Border
+            ModeList.Children.Add(new Border
             {
                 Child = row, BorderBrush = ThemeService.Brush("Chip"),
-                BorderThickness = new Thickness(0, PhraseList.Children.Count == 0 ? 0 : 1, 0, 0),
+                BorderThickness = new Thickness(0, ModeList.Children.Count == 0 ? 0 : 1, 0, 0),
             });
         }
     }
 
-    void PhraseAdd_Click(object sender, RoutedEventArgs e)
+    void BuildKindChips()
     {
-        var say = PhraseSay.Text.Trim();
-        var doIt = PhraseDo.Text.Trim();
-        if (say.Length == 0 || doIt.Length == 0) return;
-        S.JarvisPhrases.RemoveAll(p => string.Equals(p.Say, say, StringComparison.OrdinalIgnoreCase));
-        S.JarvisPhrases.Add(new JarvisPhrase { Say = say, Do = doIt });
+        foreach (var k in Modes.Kinds)
+        {
+            var chip = Chip(k.Label);
+            chip.Tag = k.Id;
+            chip.Click += (_, _) => PickKind(k.Id);
+            KindChips.Children.Add(chip);
+        }
+        PickKind("open");
+    }
+
+    void PickKind(string id)
+    {
+        _kind = id;
+        foreach (var c in KindChips.Children)
+            if (c is ToggleButton t) t.IsChecked = (string)t.Tag == id;
+        StepValue.Tag = Modes.KindOf(id).Hint;
+        StepError.Visibility = Visibility.Collapsed;
+    }
+
+    void NewMode_Click(object sender, RoutedEventArgs e) => OpenEditor(null);
+
+    void OpenEditor(JarvisMode? mode)
+    {
+        _editing = mode;
+        _steps.Clear();
+        if (mode != null) _steps.AddRange(mode.Steps.Select(s => new ModeStep { Kind = s.Kind, Value = s.Value }));
+        ModeName.Text = mode?.Name ?? "";
+        ModeCloseOnEnd.IsChecked = mode?.CloseOnEnd ?? true;
+        StepValue.Text = "";
+        PickKind("open");
+        RefreshSteps();
+        UpdateModeHint();
+        ModeEditor.Visibility = Visibility.Visible;
+        NewModeBtn.Visibility = Visibility.Collapsed;
+        ModeName.Focus();
+        ModeEditor.BringIntoView();
+    }
+
+    void CloseEditor()
+    {
+        _editing = null;
+        ModeEditor.Visibility = Visibility.Collapsed;
+        NewModeBtn.Visibility = Visibility.Visible;
+    }
+
+    void UpdateModeHint()
+    {
+        var n = ModeName.Text.Trim();
+        ModeSayHint.Text = n.Length == 0 ? "" : $"Say \u201C{n}\u201D or \u201Cstart {n}\u201D to run it, \u201Cend {n}\u201D to stop.";
+    }
+
+    void RefreshSteps()
+    {
+        StepList.Children.Clear();
+        if (_steps.Count == 0)
+        {
+            StepList.Children.Add(new TextBlock { Text = "No steps yet. Pick a type below, fill it in, press Add.", Style = (Style)FindResource("Sub"), Margin = new Thickness(12, 10, 12, 10), TextWrapping = TextWrapping.Wrap });
+            return;
+        }
+        for (int i = 0; i < _steps.Count; i++)
+        {
+            int at = i;
+            var step = _steps[i];
+            Button Small(string glyph, string tip, Action act)
+            {
+                var b = new Button { Style = (Style)FindResource("GhostIcon"), Content = glyph, ToolTip = tip, Padding = new Thickness(5), VerticalAlignment = VerticalAlignment.Center };
+                b.Click += (_, _) => { act(); RefreshSteps(); };
+                return b;
+            }
+            var tools = new StackPanel { Orientation = Orientation.Horizontal };
+            if (at > 0) tools.Children.Add(Small("\uE70E", "Move up", () => (_steps[at - 1], _steps[at]) = (_steps[at], _steps[at - 1])));
+            if (at < _steps.Count - 1) tools.Children.Add(Small("\uE70D", "Move down", () => (_steps[at + 1], _steps[at]) = (_steps[at], _steps[at + 1])));
+            tools.Children.Add(Small("\uE711", "Remove", () => _steps.RemoveAt(at)));
+
+            var icon = new TextBlock { Text = Modes.KindOf(step.Kind).Glyph, Style = (Style)FindResource("Icon"), FontSize = 13, Width = 22, VerticalAlignment = VerticalAlignment.Center };
+            var label = new TextBlock { Text = $"{at + 1}. {Modes.Describe(step)}", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var row = new DockPanel { Margin = new Thickness(10, 4, 4, 4) };
+            DockPanel.SetDock(tools, Dock.Right);
+            DockPanel.SetDock(icon, Dock.Left);
+            row.Children.Add(tools);
+            row.Children.Add(icon);
+            row.Children.Add(label);
+            StepList.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Card"), BorderThickness = new Thickness(0, at == 0 ? 0 : 1, 0, 0) });
+        }
+    }
+
+    void StepAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var err = Modes.Validate(_kind, StepValue.Text);
+        if (err != null)
+        {
+            StepError.Text = err;
+            StepError.Visibility = Visibility.Visible;
+            return;
+        }
+        StepError.Visibility = Visibility.Collapsed;
+        _steps.Add(new ModeStep { Kind = _kind, Value = StepValue.Text.Trim() });
+        StepValue.Text = "";
+        RefreshSteps();
+    }
+
+    void ModeCancel_Click(object sender, RoutedEventArgs e) => CloseEditor();
+
+    void ModeSave_Click(object sender, RoutedEventArgs e)
+    {
+        var name = ModeName.Text.Trim();
+        // A step typed but not added yet still counts.
+        if (StepValue.Text.Trim().Length > 0 && Modes.Validate(_kind, StepValue.Text) == null)
+        {
+            _steps.Add(new ModeStep { Kind = _kind, Value = StepValue.Text.Trim() });
+            StepValue.Text = "";
+        }
+        string? problem = name.Length == 0 ? "Give it a name"
+            : _steps.Count == 0 ? "Add at least one step"
+            : S.JarvisModes.Any(m => m != _editing && string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)) ? "You already have a mode with that name"
+            : null;
+        if (problem != null)
+        {
+            StepError.Text = problem;
+            StepError.Visibility = Visibility.Visible;
+            return;
+        }
+        var mode = _editing ?? new JarvisMode();
+        mode.Name = name;
+        mode.Steps = _steps.ToList();
+        mode.CloseOnEnd = ModeCloseOnEnd.IsChecked == true;
+        if (_editing == null) S.JarvisModes.Add(mode);
         SettingsStore.Save();
-        PhraseSay.Text = PhraseDo.Text = "";
-        RefreshPhrases();
-        _app.Island?.ShowMessage("\uE73E", "Good", $"Say \u201C{say}\u201D to Jarvis", 280, 2200);
+        CloseEditor();
+        RefreshModes();
+        _app.Island?.ShowMessage("\uE73E", "Good", $"Say \u201C{name}\u201D to Jarvis", 280, 2200);
     }
 
     // ================= focus =================

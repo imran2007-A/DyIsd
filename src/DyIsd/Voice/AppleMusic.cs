@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
@@ -18,7 +19,7 @@ public static class AppleMusic
 {
     const string Proc = "applemusic";
 
-    public static async Task<Reply> PlayAsync(string query, CommandRunner _)
+    public static async Task<Reply> PlayAsync(string query, CommandRunner _, bool playlist = false)
     {
         query = query.Trim();
         if (query.Length == 0) return CommandRunner.Bad("Play what?");
@@ -37,10 +38,10 @@ public static class AppleMusic
         try { CommandRunner.FocusWindow(new IntPtr(win.Current.NativeWindowHandle)); } catch { }
         await Task.Delay(400);
 
-        string result = await Task.Run(() => SearchAndPlay(win, query));
+        string result = await Task.Run(() => SearchAndPlay(win, query, playlist));
         return result switch
         {
-            "played" => CommandRunner.Ok("\uE768", $"Apple Music · {query}"),
+            "played" => CommandRunner.Ok("\uE768", playlist ? $"Playlist · {query}" : $"Apple Music · {query}"),
             "searched" => CommandRunner.Ok("\uE721", $"Searched Apple Music for \"{query}\". Pick one"),
             _ => CommandRunner.Bad("Couldn't find Apple Music's search box"),
         };
@@ -48,7 +49,7 @@ public static class AppleMusic
 
     static AutomationElement? Window() => Uia.WindowsOf(Proc).FirstOrDefault();
 
-    static string SearchAndPlay(AutomationElement win, string query)
+    static string SearchAndPlay(AutomationElement win, string query, bool playlist)
     {
         InputSim.WaitForKeysReleased();
 
@@ -76,7 +77,16 @@ public static class AppleMusic
             return "none";
         }
 
-        // 2. Wait for results, then pick the first song whose name has your words in it.
+        // Your own playlists live under the Library tab of the results; switch to it if there is one.
+        if (playlist)
+        {
+            Thread.Sleep(900);
+            var lib = Uia.Find(win, ControlType.Button, ControlType.TabItem, ControlType.RadioButton, ControlType.ListItem)
+                .FirstOrDefault(n => Regex.IsMatch(n.Name, @"^(library|your library|in library)$", RegexOptions.IgnoreCase));
+            if (lib != null) AppDriver.Activate(lib.Element);
+        }
+
+        // 2. Wait for results, then pick the first song (or playlist) whose name has your words in it.
         var words = AppCatalog.Normalize(query).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         for (int attempt = 0; attempt < 8; attempt++)
         {
@@ -92,7 +102,8 @@ public static class AppleMusic
 
             Log.Write("apple music sees results: " + string.Join(" | ", matches.Take(8).Select(m => $"{m.Type.Replace("ControlType.", "")}:{m.Name}")));
             // Songs first (their names usually mention "Song"), then anything playable.
-            var pick = matches.FirstOrDefault(m => m.Name.Contains("song", StringComparison.OrdinalIgnoreCase))
+            var pick = (playlist ? matches.FirstOrDefault(m => m.Name.Contains("playlist", StringComparison.OrdinalIgnoreCase)) : null)
+                       ?? matches.FirstOrDefault(m => !playlist && m.Name.Contains("song", StringComparison.OrdinalIgnoreCase))
                        ?? matches.FirstOrDefault(m => m.Type.Contains("ListItem") || m.Type.Contains("DataItem"))
                        ?? matches[0];
             if (Play(pick.Element)) return "played";

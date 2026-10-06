@@ -284,16 +284,35 @@
                     <UniformGrid x:Name="Tiles" Columns="2"/>
 
                     <!-- position -->
-                    <!-- your own Jarvis phrases -->
-                    <TextBlock Style="{StaticResource Section}" Text="YOUR JARVIS PHRASES"/>
+                    <!-- modes: one phrase (or ▶) runs a list of steps -->
+                    <TextBlock Style="{StaticResource Section}" Text="MODES"/>
                     <Border Background="{DynamicResource Card}" CornerRadius="16" ClipToBounds="True">
-                        <StackPanel x:Name="PhraseList"/>
+                        <StackPanel x:Name="ModeList"/>
                     </Border>
-                    <Border Background="{DynamicResource Card}" CornerRadius="16" Padding="12" Margin="0,8,0,0">
+                    <Button x:Name="NewModeBtn" Style="{StaticResource Btn}" Content="+ New mode" Margin="0,8,0,0" Click="NewMode_Click"/>
+                    <Border x:Name="ModeEditor" Background="{DynamicResource Card}" CornerRadius="16" Padding="12" Margin="0,8,0,0" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBox x:Name="PhraseSay" Style="{StaticResource Field}" Tag="When I say… e.g. lab mode" MaxLength="40"/>
-                            <TextBox x:Name="PhraseDo" Style="{StaticResource Field}" Tag="Jarvis does… e.g. open vs code and open chrome and play apple music" Margin="0,8,0,0" MaxLength="240"/>
-                            <Button x:Name="PhraseAdd" Style="{StaticResource BlueBtn}" Content="Add phrase" Margin="0,8,0,0" Click="PhraseAdd_Click" IsEnabled="False"/>
+                            <TextBox x:Name="ModeName" Style="{StaticResource Field}" Tag="Name, e.g. Claude mode" MaxLength="30"/>
+                            <TextBlock x:Name="ModeSayHint" Style="{StaticResource Sub}" Margin="2,6,0,0" TextWrapping="Wrap"/>
+                            <TextBlock Text="STEPS" Style="{StaticResource Sub}" FontWeight="SemiBold" Margin="2,12,0,4"/>
+                            <Border Background="{DynamicResource Chip}" CornerRadius="12" ClipToBounds="True">
+                                <StackPanel x:Name="StepList"/>
+                            </Border>
+                            <TextBlock Text="ADD A STEP" Style="{StaticResource Sub}" FontWeight="SemiBold" Margin="2,12,0,6"/>
+                            <WrapPanel x:Name="KindChips"/>
+                            <DockPanel Margin="0,4,0,0">
+                                <Button x:Name="StepAdd" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="+ Add" Margin="6,0,0,0" Click="StepAdd_Click" VerticalAlignment="Center"/>
+                                <TextBox x:Name="StepValue" Style="{StaticResource Field}" Tag="Pick a step type above"/>
+                            </DockPanel>
+                            <TextBlock x:Name="StepError" Style="{StaticResource Sub}" Foreground="{DynamicResource Orange}" Margin="2,6,0,0" Visibility="Collapsed"/>
+                            <DockPanel Margin="2,12,0,0">
+                                <ToggleButton x:Name="ModeCloseOnEnd" DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="True" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#x201C;End &#x2026;&#x201D; closes its apps and pauses the music" Style="{StaticResource Sub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                            </DockPanel>
+                            <UniformGrid Columns="2" Margin="0,12,0,0">
+                                <Button Style="{StaticResource Btn}" Content="Cancel" Margin="0,0,4,0" Click="ModeCancel_Click"/>
+                                <Button x:Name="ModeSave" Style="{StaticResource BlueBtn}" Content="Save mode" Margin="4,0,0,0" Click="ModeSave_Click"/>
+                            </UniformGrid>
                         </StackPanel>
                     </Border>
 

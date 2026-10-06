@@ -59,6 +59,55 @@ public sealed class CommandRunner
         return last;
     }
 
+    /// <summary>Runs every step of a mode in order. A step that fails is skipped, not the whole mode.</summary>
+    public async Task<Reply> RunModeAsync(JarvisMode mode, Action<string>? progress = null)
+    {
+        int done = 0, total = mode.Steps.Count;
+        var failed = new List<string>();
+        for (int i = 0; i < total; i++)
+        {
+            var step = mode.Steps[i];
+            progress?.Invoke($"{mode.Name} · {Modes.Describe(step)}");
+            var cmds = Modes.ToCommands(step);
+            Reply r;
+            try { r = await RunAsync(cmds); }
+            catch (Exception ex) { Log.Error("mode step", ex); r = Bad(ex.Message); }
+            if (r.Confirm != null) r = Bad("needs a yes, skipped"); // modes never send or call without you
+            Log.Write($"mode {mode.Name}: {Modes.Describe(step)} → {r.Text}");
+            if (r.Failed) failed.Add(Modes.Describe(step));
+            else done++;
+            // Let an app that was just opened appear before the next step uses the keyboard.
+            if (i + 1 < total && step.Kind is "open") await WaitForNewWindowAsync(4000);
+        }
+        string name = ModeTitle(mode.Name);
+        if (failed.Count == 0) return Good("\uE945", $"{name} on");
+        return new Reply("\uE783", "Orange", $"{name}: {done} of {total} done · {failed[0]} didn't work", Failed: done == 0);
+    }
+
+    /// <summary>"End Claude mode": closes the apps the mode opened and pauses the music.</summary>
+    public async Task<Reply> EndModeAsync(JarvisMode mode)
+    {
+        string name = ModeTitle(mode.Name);
+        if (!mode.CloseOnEnd) return Ok("\uE73E", $"{name} off");
+        int closed = 0;
+        foreach (var step in mode.Steps.Where(s => s.Kind == "open"))
+        {
+            var t = step.Value.Trim();
+            if (SitesMap.ContainsKey(t) || t.Contains('.')) continue; // websites stay: it's your browser
+            if (!CloseApp(t).Failed) closed++;
+        }
+        if (_app.Media.State.IsPlaying && mode.Steps.Any(s => s.Kind is "playlist" or "song" or "youtube"))
+            await _app.Media.TogglePlayPauseAsync();
+        if (mode.Steps.Any(s => s.Kind == "focus") && _app.Timer.IsActive) _app.Timer.End();
+        return Ok("\uE73E", closed > 0 ? $"{name} off · closed {closed} app{(closed == 1 ? "" : "s")}" : $"{name} off");
+    }
+
+    static string ModeTitle(string name)
+    {
+        var t = Title(name.Trim());
+        return System.Text.RegularExpressions.Regex.IsMatch(t, @"\b(mode|session)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? t : t + " mode";
+    }
+
     async Task<Reply> RunOneAsync(Cmd c)
     {
         switch (c.Kind)
@@ -123,6 +172,10 @@ public sealed class CommandRunner
             case "media": return await MediaAsync(c.Text);
             case "play-app": return await PlayAppAsync(c.Text);
             case "applemusic": return await AppleMusic.PlayAsync(c.Text, this);
+            case "applemusic-playlist": return await AppleMusic.PlayAsync(c.Text, this, playlist: true);
+            case "wait":
+                await Task.Delay(Math.Clamp(c.N, 1, 120) * 1000);
+                return new Reply("\uE823", "Accent", $"Waited {c.N} s", Silent: true);
             case "stop":
                 if (_app.Media.State.IsPlaying) return await MediaAsync("pause");
                 return new Reply("\uE711", "Accent", "Okay", Silent: true);

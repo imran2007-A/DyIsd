@@ -66,7 +66,7 @@ Things you can say (and many ways to say each):
 | WhatsApp | "message Rahul saying I'm late", "text Amma that I'll be home by 8", "send hi to Rahul on WhatsApp", "call Amma on WhatsApp", "video call Rahul on WhatsApp". Always asks "Send to Rahul Kumar?" with the name WhatsApp actually found; nothing is sent until you say yes or click Yes |
 | Discord | "deafen" / "undeafen", "join general voice", "join voice chat", "leave the voice channel", "call MRGorilla on Discord" (asks first). The island's Mute button and mute state now come from Discord's own button |
 | Claude | "ask Claude to explain recursion" (types it, doesn't send), "… and send it" (sends), "new Claude chat", "start a new chat in Claude and ask it to summarise my notes" |
-| Your own phrases | Control Center → **Your Jarvis phrases**: "lab mode" → "open vs code and open chrome and play apple music". Say it and Jarvis does all of them |
+| Modes | Say "Claude mode" / "start Claude mode" to run one of your modes, "end Claude mode" to stop it (closes the apps it opened, pauses the music). "Play my Chill Vibes playlist" plays an Apple Music playlist |
 | DyIsd | "hide the island", "move the island left", "open control center", "go to sleep" (stops listening for its name), "help" |
 
 **Jarvis key:** Ctrl + Space by default. Change it in Control Center → Options → **Jarvis key**
@@ -75,6 +75,29 @@ Things you can say (and many ways to say each):
 A single word on its own ("Discord") only opens apps that are already open, have a nickname
 DyIsd knows, or are known websites, so a misheard word never launches a random app. Say
 "open …" for anything else. On a call, "mute" / "unmute" means your microphone.
+
+## Modes
+
+Control Center → **Modes** → **+ New mode**. Give it a name, then add steps in any order and
+any combination:
+
+| Step | Example |
+|---|---|
+| Open app / site | Claude, VS Code, leetcode.com |
+| Apple Music playlist / song | Chill Vibes / Believer |
+| Play on YouTube | lofi hip hop (plays the top video) |
+| Volume / Brightness | 30 / 70 |
+| Focus timer | 50 minutes |
+| Dark / light, Wi-Fi, Bluetooth | dark, off, on |
+| Wait | 3 seconds (let a slow app load before the next step) |
+| Type text | exactly what to type |
+| Close app | Discord |
+| Any Jarvis command | anything you'd say: "ask claude to plan my day", "message Rahul saying I'm studying" |
+
+Run it by saying its name ("Claude mode", "start Claude mode") or with ▶ next to it, no voice
+needed. "End Claude mode" closes the apps it opened and pauses the music (switch that off per
+mode). Steps run in order; one that fails is skipped and the island says which. WhatsApp
+messages and calls inside a mode never send without your yes, so they're skipped in a mode.
 
 ## Honest limits
 

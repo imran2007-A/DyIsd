@@ -193,7 +193,9 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .dl-item span{font:400 11.5px/1.3 var(--ios);color:rgba(255,255,255,.5)}
 .dl-item .when{font:600 12px/1 var(--ios);padding:5px 8px;border-radius:8px;background:#2c2c2e;white-space:nowrap;font-variant-numeric:tabular-nums}
 .dl-item .del{border:0;background:transparent;color:rgba(255,255,255,.4);width:26px;height:26px;border-radius:50%;cursor:pointer;display:grid;place-items:center;padding:5px}
-.dl-item .del:hover{background:#3a3a3c;color:#fff}
+.dl-item .del:hover,.mrow .del:hover{background:#3a3a3c;color:#fff}
+.mrow .del{border:0;background:transparent;color:rgba(255,255,255,.45);width:26px;height:26px;border-radius:50%;cursor:pointer;display:grid;place-items:center;padding:5px;flex:none}
+.mrow .del svg{width:100%;height:100%}
 .dl-item .del svg{width:100%;height:100%}
 .src-cal{font-size:10.5px;color:rgba(255,255,255,.45);margin-left:4px}
 .dl-empty{padding:14px;color:rgba(255,255,255,.5);font-size:13px}
@@ -402,6 +404,9 @@ const I={
   watch:sv('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 2.5h5M12 2.5v3.5"/>'),
   key:sv('<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7 14h10"/>'),
   globe:sv('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.4 3.6 5.2 3.6 8.5s-1.1 6.1-3.6 8.5c-2.5-2.4-3.6-5.2-3.6-8.5S9.5 5.9 12 3.5z"/>'),
+  edit:sv('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+  up:sv('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  dn:sv('<path d="M12 5v14M6 13l6 6 6-6"/>'),
   link:sv('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>')
 };
 const ring=(pct,size,c)=>`<svg class="ring" width="${size}" height="${size}" viewBox="0 0 20 20" style="--c:${c||'#FF9F0A'}"><circle class="trk" cx="10" cy="10" r="8"/><circle class="v js-ring" cx="10" cy="10" r="8" pathLength="100" style="stroke-dashoffset:${100-pct}"/></svg>`;
@@ -428,7 +433,9 @@ const S={
   opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true,wake:true,jsounds:true},
   clock:{mode:'timer',t:300},ring:{app:'whatsapp',who:'Amma'},xfer:{title:'Sending · Bluetooth',file:'Resume_Imran.pdf',pct:0},
   muted:false,dismissed:{},pref:null,prefPair:null,
-  jarvis:{ready:false,dl:-1,on:true,pending:null,key:'Ctrl + Space',phrases:[{say:'lab mode',do:'open vs code and open chrome and play apple music'}]},
+  jarvis:{ready:false,dl:-1,on:true,pending:null,key:'Ctrl + Space',
+    modes:[{name:'Claude mode',close:true,steps:[{k:'open',v:'Claude'},{k:'playlist',v:'Chill Vibes'},{k:'volume',v:'30'}]},
+           {name:'Lab mode',close:true,steps:[{k:'open',v:'VS Code'},{k:'open',v:'Chrome'},{k:'focus',v:'50'}]}]},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
@@ -850,9 +857,19 @@ function renderCC(){
   <h4>Show on the island</h4>
   <div class="tiles">${TILES.map(([k,n,ic,c])=>`<button class="tile" data-tile="${k}" aria-pressed="${on(k)}" style="--tc:${c}"><span class="ti">${ic}</span><span><span class="tn">${n}</span><br><span class="ts">${on(k)?'On':'Off'}</span></span></button>`).join('')}</div>
 
-  <h4>Your Jarvis phrases</h4>
-  <div class="dl-list">${S.jarvis.phrases.length?S.jarvis.phrases.map((p,i)=>`<div class="dl-item" style="grid-template-columns:1fr auto;padding-left:14px"><div><b>“${esc(p.say)}”</b><span>→ ${esc(p.do)}</span></div><button class="del" data-delph="${i}" aria-label="Remove ${esc(p.say)}">${I.x}</button></div>`).join(''):'<div class="dl-empty">None yet. Teach Jarvis a shortcut: one phrase that does several things.</div>'}</div>
-  <div class="add"><input type="text" id="phSay" placeholder="When I say… e.g. lab mode" maxlength="40" autocomplete="off"><input type="text" id="phDo" placeholder="Jarvis does… e.g. open vs code and open chrome" maxlength="240" autocomplete="off"><button class="go" id="phAdd">Add phrase</button></div>
+  <h4>Modes</h4>
+  <div class="dl-list">${S.jarvis.modes.length?S.jarvis.modes.map((m,i)=>`<div class="dl-item" style="grid-template-columns:1fr auto auto auto;padding-left:14px"><div><b>${esc(m.name)}</b><span>${m.steps.map(stepText).map(esc).join(' · ')}</span></div>
+    <button class="pb sm w" data-runmode="${i}" aria-label="Start ${esc(m.name)}">▶</button><button class="del" data-editmode="${i}" aria-label="Edit">${I.edit}</button><button class="del" data-delmode="${i}" aria-label="Delete">${I.x}</button></div>`).join(''):'<div class="dl-empty">No modes yet. A mode runs several things at once.</div>'}</div>
+  ${ed?`<div class="add">
+    <input type="text" id="mdName" placeholder="Name, e.g. Claude mode" maxlength="30" value="${esc(ed.name)}" autocomplete="off">
+    <div class="preview">${ed.name.trim()?`Say “${esc(ed.name.trim())}” or “start ${esc(ed.name.trim())}”, “end ${esc(ed.name.trim())}” to stop.`:''}</div>
+    <div style="background:#2c2c2e;border-radius:12px;overflow:hidden">${ed.steps.length?ed.steps.map((st,i)=>`<div class="mrow" style="display:flex;align-items:center;gap:4px;padding:6px 6px 6px 12px;border-top:${i?'1px solid #1c1c1e':'0'}"><span style="flex:1;font:500 13px var(--ios)">${i+1}. ${esc(stepText(st))}</span>${i?`<button class="del" data-stepup="${i}" aria-label="Move up" style="flex:none">${I.up}</button>`:''}${i<ed.steps.length-1?`<button class="del" data-stepdown="${i}" aria-label="Move down" style="flex:none">${I.dn}</button>`:''}<button class="del" data-steprm="${i}" aria-label="Remove" style="flex:none">${I.x}</button></div>`).join(''):'<div class="dl-empty" style="padding:10px 12px">No steps yet. Pick a type, fill it in, press Add.</div>'}</div>
+    <div class="add-row">${KINDS.map(([k,l])=>`<button class="chip" data-kind="${k}" aria-pressed="${ed.kind===k}">${l}</button>`).join('')}</div>
+    <div class="add-row"><input type="text" id="mdVal" placeholder="${esc(KINDS.find(x=>x[0]===ed.kind)[2])}" style="flex:1;min-width:0" autocomplete="off"><button class="chip" id="mdAdd">+ Add</button></div>
+    <div class="preview" id="mdErr" style="color:#FF9F0A"></div>
+    <label class="add-row" style="justify-content:space-between"><span class="preview">“End …” closes its apps and pauses the music</span><input type="checkbox" class="sw" id="mdClose" ${ed.close?'checked':''}></label>
+    <div class="add-row"><button class="pb" id="mdCancel" style="flex:1">Cancel</button><button class="go" id="mdSave" style="flex:1">Save mode</button></div>
+  </div>`:`<button class="pb" id="mdNew" style="width:100%;margin-top:8px">+ New mode</button>`}
 
   <h4>Position</h4>
   <div class="seg">${['left','center','right'].map(p=>`<button data-pos="${p}" aria-pressed="${S.pos===p}">${posMini(p)}${p[0].toUpperCase()+p.slice(1)}</button>`).join('')}</div>
@@ -866,7 +883,7 @@ function renderCC(){
 
   <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="logs">Log folder</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
   renderDeadlines();wireAdd();
-  $('#phAdd').addEventListener('click',()=>{const a=$('#phSay').value.trim(),b=$('#phDo').value.trim();if(!a||!b)return;S.jarvis.phrases=S.jarvis.phrases.filter(p=>p.say.toLowerCase()!==a.toLowerCase());S.jarvis.phrases.push({say:a,do:b});renderCC();pop('msg',{i:I.check,c:'#30D158',t:`Say “${a}” to Jarvis`,w:260},2000)});
+  wireModes();
   const jk=$('#jkBtn');jk.addEventListener('click',()=>{jk.textContent='Press keys…';jk.classList.add('listen');
     const on=e=>{if(['Control','Shift','Meta'].includes(e.key)||(e.key==='Alt'&&e.code!=='AltRight'))return;e.preventDefault();
       if(e.key==='Escape')S.jarvis.key='Ctrl + Space';
@@ -944,9 +961,11 @@ cc.addEventListener('click',e=>{
   const tile=e.target.closest('[data-tile]');if(tile){const k=tile.dataset.tile;S.f[k]=!S.f[k];
     if(!S.f[k]){if(k==='media')stopAct('media');if(k==='calls'){stopAct('call');stopAct('ring')}if(k==='clock')stopAct('clock');if(k==='transfers')stopAct('xfer');if(k==='downloads')stopAct('download');if(k==='focus')stopAct('timer')}
     save();renderCC();render();return}
-  const p=e.target.closest('[data-pos]');if(p){setPos(p.dataset.pos);return}
+  const p=e.target.closest('button[data-pos]');if(p){setPos(p.dataset.pos);return}
   const mn=e.target.closest('[data-min]');if(mn){S.focusMin=+mn.dataset.min;save();renderCC();return}
-  const dp=e.target.closest('[data-delph]');if(dp){S.jarvis.phrases.splice(+dp.dataset.delph,1);renderCC();return}
+  const rm=e.target.closest('[data-runmode]');if(rm){toggleCC(false);runMode(S.jarvis.modes[+rm.dataset.runmode]);return}
+  const em=e.target.closest('[data-editmode]');if(em){const m=S.jarvis.modes[+em.dataset.editmode];ed={idx:+em.dataset.editmode,name:m.name,close:m.close,steps:m.steps.map(x=>({...x})),kind:'open'};renderCC();return}
+  const dm=e.target.closest('[data-delmode]');if(dm){S.jarvis.modes.splice(+dm.dataset.delmode,1);ed=null;renderCC();return}
   const del=e.target.closest('[data-del]');if(del){S.deadlines=S.deadlines.filter(d=>d.id!==+del.dataset.del);renderDeadlines();return}
   const c=e.target.closest('[data-cc]');if(!c)return;
   switch(c.dataset.cc){
@@ -1068,6 +1087,7 @@ function jOne(orig){
   if(/^(previous|last song|go back a song)( song| track)?$/.test(t)){S.media.idx=(S.media.idx+2)%TRACKS.length;S.media.t=0;render();return{silent:true}}
   if(/^(whats playing|what song is this|whats this song)$/.test(t))return S.acts.media||S.pausedHere?{i:I.music,t:`${trk().title} · ${trk().artist}`}:{i:I.music,t:'Nothing is playing'};
   if(/^play (?:a |some |the )?(?:apple music|songs? (?:on|from|in) apple music)$/.test(t)){trig('spotify');return{i:I.music,t:'Playing Apple Music'}}
+  if(m=t.match(/^play (?:my |the )?(?:playlist (.+?)|(.+?) playlist)(?: on apple music)?$/)){trig('spotify');return{i:I.music,t:`Playlist · ${m[1]||m[2]}`}}
   if(m=t.match(/^play (.+?) (?:on|in|from) apple music$/)){trig('spotify');return{i:I.music,t:`Apple Music · ${m[1]}`}}
   if(m=t.match(/^(?:open|watch) (.+?) on (prime video|netflix|hotstar|youtube)$/))return{i:I.globe,t:`${m[2].replace(/\b\w/g,c=>c.toUpperCase())} · ${m[1]}`};
   if(m=t.match(/^play (.+?)(?: on youtube)?$/)){S.media.app='chrome';S.media.playing=true;S.pausedHere=false;startAct('media','chrome');render();return{i:I.play,t:`YouTube · ${m[1]} (top video)`}}
@@ -1117,8 +1137,8 @@ function jarvisSay(text,instant){
     const lower=text.toLowerCase().replace(/[.!]/g,'').trim();
     if(p&&/^(yes|yeah|sure|do it|confirm)$/.test(lower)){jReply({i:I.check,c:'#30D158',t:p},text);return}
     if(p&&/^(no|cancel|never ?mind)$/.test(lower)){jReply({i:I.x,t:'Cancelled'},text);return}
-    const mine=S.jarvis.phrases.find(p=>p.say.toLowerCase()===lower);
-    const parts=jSplit(mine?mine.do:text);let last=null;const labels=[];
+    const mm=matchMode(text);if(mm){if(mm.end)endMode(mm.m);else runMode(mm.m);return}
+    const parts=jSplit(text);let last=null;const labels=[];
     for(const part of parts){const r=jOne(part);last=r;if(r.fail||r.yes)break;if(!r.silent)labels.push(r.t)}
     if(last.yes)S.jarvis.pending=last.confirm;
     if(!last.fail&&!last.yes&&labels.length>1)last={...last,t:labels.slice(-3).join(' · ')};
@@ -1126,6 +1146,47 @@ function jarvisSay(text,instant){
     jReply(last,text)},instant?500:650)};
   if(instant){jListening('Listening…');chime.listen();setTimeout(run,1100)}else run();
 }
+const KINDS=[['open','Open app / site','Claude, VS Code, leetcode.com…'],['playlist','Apple Music playlist','Playlist name, e.g. Chill Vibes'],['song','Apple Music song','Song name, e.g. Believer'],
+  ['youtube','Play on YouTube','What to play, e.g. lofi hip hop'],['volume','Volume','0 – 100'],['brightness','Brightness','0 – 100'],['focus','Focus timer','Minutes, e.g. 50'],
+  ['theme','Dark / light','dark or light'],['wifi','Wi-Fi','on or off'],['bluetooth','Bluetooth','on or off'],['wait','Wait','Seconds, e.g. 3'],['type','Type text','Exactly what to type'],
+  ['close','Close app','App name, e.g. Discord'],['say','Any Jarvis command','Anything you\'d say, e.g. ask claude to plan my day']];
+function stepText(st){const v=st.v;return({open:`Open ${v}`,playlist:`Play playlist “${v}”`,song:`Play “${v}” on Apple Music`,youtube:`Play “${v}” on YouTube`,volume:`Volume ${v}`,brightness:`Brightness ${v}`,
+  focus:`Focus ${v} min`,theme:`${v[0].toUpperCase()+v.slice(1)} mode`,wifi:`Wi-Fi ${v}`,bluetooth:`Bluetooth ${v}`,wait:`Wait ${v} s`,type:`Type “${v}”`,close:`Close ${v}`})[st.k]||`“${v}”`}
+function validStep(k,v){v=v.trim();if(!v)return'Fill in the box first';const n=+v;
+  if(k==='volume'||k==='brightness')return n>=0&&n<=100&&v!==''&&!isNaN(n)?null:'Use a number from 0 to 100';
+  if(k==='focus')return n>=1&&n<=600?null:'Use minutes, 1 to 600';if(k==='wait')return n>=1&&n<=120?null:'Use seconds, 1 to 120';
+  if(k==='theme')return/^(dark|light)$/i.test(v)?null:'Type dark or light';if(k==='wifi'||k==='bluetooth')return/^(on|off)$/i.test(v)?null:'Type on or off';return null}
+let ed=null;
+function wireModes(){
+  const nb=$('#mdNew');if(nb)nb.addEventListener('click',()=>{ed={idx:-1,name:'',close:true,steps:[],kind:'open'};renderCC()});
+  if(!ed)return;
+  const nm=$('#mdName');nm.addEventListener('input',()=>{ed.name=nm.value});nm.addEventListener('change',renderCC);
+  cc.querySelectorAll('[data-kind]').forEach(b=>b.addEventListener('click',()=>{ed.kind=b.dataset.kind;renderCC()}));
+  const add=()=>{const v=$('#mdVal').value,err=validStep(ed.kind,v);if(err){$('#mdErr').textContent=err;return}ed.steps.push({k:ed.kind,v:v.trim()});renderCC()};
+  $('#mdAdd').addEventListener('click',add);$('#mdVal').addEventListener('keydown',e=>{if(e.key==='Enter')add()});
+  cc.querySelectorAll('[data-steprm]').forEach(b=>b.addEventListener('click',()=>{ed.steps.splice(+b.dataset.steprm,1);renderCC()}));
+  cc.querySelectorAll('[data-stepup]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.stepup;[ed.steps[i-1],ed.steps[i]]=[ed.steps[i],ed.steps[i-1]];renderCC()}));
+  cc.querySelectorAll('[data-stepdown]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.stepdown;[ed.steps[i+1],ed.steps[i]]=[ed.steps[i],ed.steps[i+1]];renderCC()}));
+  $('#mdClose').addEventListener('change',e=>{ed.close=e.target.checked});
+  $('#mdCancel').addEventListener('click',()=>{ed=null;renderCC()});
+  $('#mdSave').addEventListener('click',()=>{const name=$('#mdName').value.trim();
+    const p=!name?'Give it a name':!ed.steps.length?'Add at least one step':S.jarvis.modes.some((m,i)=>i!==ed.idx&&m.name.toLowerCase()===name.toLowerCase())?'You already have a mode with that name':null;
+    if(p){$('#mdErr').textContent=p;return}const m={name,close:ed.close,steps:ed.steps};if(ed.idx>=0)S.jarvis.modes[ed.idx]=m;else S.jarvis.modes.push(m);ed=null;renderCC();
+    pop('msg',{i:I.check,c:'#30D158',t:`Say “${name}” to Jarvis`,w:260},2000)});
+}
+const modeCore=s=>s.toLowerCase().replace(/[.!?,]/g,'').trim().replace(/^(the|my) /,'').replace(/ (mode|session|time)$/,'').trim();
+function matchMode(text){let t=text.toLowerCase().replace(/[.!?,]/g,'').trim();
+  const end=/^(end|stop|exit|leave|turn off|finish)\s/.test(t)||(/^(close|quit)\s/.test(t)&&/ (mode|session)$/.test(t));
+  t=t.replace(/^(end|stop|exit|leave|turn off|finish|close|quit|start|begin|enter|activate|switch to|turn on|lets do|time for)\s+/,'');
+  const core=modeCore(t);const m=S.jarvis.modes.find(m=>modeCore(m.name)===core&&m.steps.length);return m?{m,end}:null}
+async function runMode(m){const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  for(const st of m.steps){clearInterval(waveT);pop('jarvis',{text:`${m.name} · ${stepText(st)}`,listening:false},60000);await wait(700);
+    const v=st.v;switch(st.k){case'open':{const k=Object.keys(APPS).find(k=>APPS[k].name.toLowerCase()===v.toLowerCase());if(k)jumpTo(k);break}
+      case'playlist':case'song':trig('spotify');break;case'youtube':trig('youtube');break;case'volume':S.vol=+v;break;case'brightness':S.bri=+v;break;
+      case'focus':S.focusMin=+v;startFocus();break;case'say':jarvisSay(v,false);await wait(900);break}}
+  render();jReply({i:I.bolt,c:'#30D158',t:`${m.name.replace(/\b\w/g,c=>c.toUpperCase())}${/mode$/i.test(m.name)?'':' mode'} on`},'')}
+function endMode(m){if(m.close){stopAct('media');stopAct('timer');S.fg='word';renderDesktop();render()}
+  jReply({i:I.check,t:`${m.name} off${m.close?' · closed its apps':''}`},'')}
 function jConfirm(yes){const p=S.jarvis.pending;S.jarvis.pending=null;if(!p){endPop();return}jReply(yes?{i:I.check,c:'#30D158',t:p}:{i:I.x,t:'Cancelled'},'')}
 function jDownload(){if(S.jarvis.dl>=0||S.jarvis.ready)return;S.jarvis.dl=0;renderCC();
   const t=setInterval(()=>{S.jarvis.dl=Math.min(100,S.jarvis.dl+4);pop('jcard',{i:I.down,t:"Downloading Jarvis's ears",s:`One time · stays on this laptop · ${Math.round(S.jarvis.dl)}%`},60000);renderCC();
@@ -1152,7 +1213,7 @@ window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.ctrlKey&&!e.altKey&
 window.addEventListener('keyup',e=>{if(holding&&(e.code==='Space'||e.key==='Control'))holdEnd()});
 jvText.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();jarvisSay(jvText.value,true)}});
 const CHIPS=['open chrome and search for cats','volume 30','next song','set a timer for 2 minutes','remind me to submit DBMS at 5 pm',"what's 15 percent of 2400",
-  'mute','play believer on apple music','message Rahul saying I\'m late','ask Claude to explain recursion','lab mode','deafen','watch friends on prime video','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
+  'mute','play believer on apple music','message Rahul saying I\'m late','ask Claude to explain recursion','claude mode','end claude mode','play my chill vibes playlist','deafen','watch friends on prime video','open leetcode','type hello and press enter','answer the call','shut down the laptop','dark mode','go to tab 3'];
 $('#jvChips').innerHTML=CHIPS.map(c=>`<button class="btn" data-say="${esc(c)}">${esc(c)}</button>`).join('');
 $('#jvChips').addEventListener('click',e=>{const b=e.target.closest('[data-say]');if(b){jvText.value=b.dataset.say;jarvisSay(b.dataset.say,true)}});
 

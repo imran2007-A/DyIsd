@@ -350,6 +350,9 @@ public static class CommandParser
         // ----- Claude -----
         Add(@"(?:ask|tell) claude.*|(?:new|start a new|start new|open a new|open new|start a) (?:claude )?(?:chat|session|conversation)(?: (?:in|on|with) claude)?.*",
             (_, o) => AskClaude(o));
+        // "play my chill vibes playlist", "play playlist gym on apple music"
+        Add(@"(?:play|start|put on|shuffle) (?:my |the |our )?(?:playlist (?:called |named )?(.+?)|(.+?) playlist)(?: (?:on|in|from) (?:apple music|music|itunes))?",
+            (m, _) => new Cmd("applemusic-playlist", First(m)));
         // "play apple music", "play a song from apple music": start the app and press play.
         Add(@"(?:play|start|put on|open and play)(?: (?:some|a|my|the))? (?:apple music|music app|the music app|itunes|spotify|my music)|(?:play|start|put on)(?: (?:some|a|any|my|the))? (?:song|songs|music|track)s? (?:on|in|from|with) (?:apple music|music|itunes|spotify|the music app)",
             (m, _) => new Cmd("play-app", m.Value.Contains("spotify") ? "spotify" : "apple music"));

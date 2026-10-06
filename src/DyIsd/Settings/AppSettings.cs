@@ -53,6 +53,23 @@ public sealed class JarvisPhrase
     public string Do { get; set; } = "";
 }
 
+/// <summary>One step of a mode, e.g. ("playlist", "Chill Vibes") or ("volume", "30").</summary>
+public sealed class ModeStep
+{
+    /// <summary>open, close, playlist, song, youtube, volume, brightness, focus, theme, wifi, bluetooth, wait, type, say.</summary>
+    public string Kind { get; set; } = "say";
+    public string Value { get; set; } = "";
+}
+
+/// <summary>A mode: say its name (or press ▶ in the Control Center) and Jarvis runs its steps in order.</summary>
+public sealed class JarvisMode
+{
+    public string Name { get; set; } = "";
+    public List<ModeStep> Steps { get; set; } = new();
+    /// <summary>"End … mode" closes the apps it opened and pauses the music.</summary>
+    public bool CloseOnEnd { get; set; } = true;
+}
+
 public sealed class AppSettings
 {
     /// <summary>"left", "center" or "right".</summary>
@@ -81,8 +98,10 @@ public sealed class AppSettings
     public int JarvisKey { get; set; } = 0x20;
     /// <summary>Win32.MOD_KEY_* flags that must be held with JarvisKey.</summary>
     public int JarvisMods { get; set; } = 2;
-    /// <summary>Your own phrases: say one, Jarvis does the commands written next to it.</summary>
+    /// <summary>Old "your phrases"; turned into modes on load.</summary>
     public List<JarvisPhrase> JarvisPhrases { get; set; } = new();
+    /// <summary>Your modes ("Claude mode": open Claude, play my playlist…).</summary>
+    public List<JarvisMode> JarvisModes { get; set; } = new();
 }
 
 /// <summary>Loads and saves settings to %LOCALAPPDATA%\DyIsd\settings.json.</summary>
@@ -111,6 +130,13 @@ public static class SettingsStore
         Current.Features ??= new FeatureFlags();
         Current.ManualDeadlines ??= new List<ManualDeadline>();
         Current.JarvisPhrases ??= new List<JarvisPhrase>();
+        Current.JarvisModes ??= new List<JarvisMode>();
+        foreach (var m in Current.JarvisModes) m.Steps ??= new List<ModeStep>();
+        // Phrases from the earlier version become one-step modes.
+        foreach (var p in Current.JarvisPhrases)
+            if (p.Say.Trim().Length > 0 && !Current.JarvisModes.Exists(m => string.Equals(m.Name, p.Say, StringComparison.OrdinalIgnoreCase)))
+                Current.JarvisModes.Add(new JarvisMode { Name = p.Say.Trim(), Steps = { new ModeStep { Kind = "say", Value = p.Do } }, CloseOnEnd = false });
+        Current.JarvisPhrases.Clear();
         if (Current.JarvisKey == 0) { Current.JarvisKey = 0x20; Current.JarvisMods = 2; }
         Current.FocusMinutes = Math.Clamp(Current.FocusMinutes, 1, 180);
         if (Current.Position is not ("left" or "center" or "right")) Current.Position = "center";

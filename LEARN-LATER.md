@@ -64,7 +64,8 @@ at the file where it happens.
       then see it used in `Voice/WhatsApp.cs`, `Services/DiscordControl.cs`, `Voice/ClaudeApp.cs`
 - [ ] Why WhatsApp asks before sending: confirm with the real name found, never guess → `WhatsApp.MessageAsync()`
 - [ ] Reading a web page without a browser (the top YouTube video) → `CommandRunner.YouTubePlayAsync()`
-- [ ] Your own phrases: settings + a lookup before parsing → `JarvisService.ExpandPhrases()`
+- [ ] Modes: data (a list of steps) turned into commands → `Voice/Modes.cs`, run by
+      `CommandRunner.RunModeAsync()`; the builder UI → `ControlCenter.xaml.cs` (search "modes")
 - [ ] Later, adding AI: "select, don't generate" (the AI picks one of these commands, it never
       runs anything it made up) → ask Claude when you get here
 
