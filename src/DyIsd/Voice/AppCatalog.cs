@@ -207,10 +207,10 @@ public static class AppCatalog
     }
 
     /// <summary>Installed Epic Games titles (Fortnite, Rocket League…), from the launcher's own records.</summary>
-    static IEnumerable<InstalledApp> EpicGames()
+    internal static IEnumerable<InstalledApp> EpicGames(string? dir = null)
     {
         var found = new List<InstalledApp>();
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
+        dir ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
         try
         {
             if (!Directory.Exists(dir)) return found;
@@ -224,6 +224,10 @@ public static class AppCatalog
                     var name = Get("DisplayName");
                     var appName = Get("AppName");
                     if (name.Length == 0 || appName.Length == 0 || Junk.IsMatch(name)) continue;
+                    // DLC and add-ons have their own records pointing at the main game: skip them.
+                    var main = Get("MainGameAppName");
+                    if (main.Length > 0 && !main.Equals(appName, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (r.TryGetProperty("bIsIncompleteInstall", out var inc) && inc.ValueKind == JsonValueKind.True) continue;
                     var ns = Get("CatalogNamespace");
                     var item = Get("CatalogItemId");
                     var id = ns.Length > 0 && item.Length > 0 ? $"{ns}%3A{item}%3A{appName}" : appName;
