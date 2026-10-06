@@ -72,6 +72,11 @@ Things you can say (and many ways to say each):
 **Jarvis key:** Ctrl + Space by default. Change it in Control Center → Options → **Jarvis key**
 (Ctrl + Space blocks VS Code's autocomplete; Right Alt on its own is a good swap).
 
+**Any installed app or game works with "open / launch / start …"**: everything in your Start
+menu, plus desktop shortcuts, Epic Games titles (Fortnite…) and Steam games. The list refreshes
+every 30 minutes, so newly installed apps show up on their own. If Jarvis keeps mishearing an
+unusual name, make a mode with that spoken name and one "Open app" step.
+
 A single word on its own ("Discord") only opens apps that are already open, have a nickname
 DyIsd knows, or are known websites, so a misheard word never launches a random app. Say
 "open …" for anything else. On a call, "mute" / "unmute" means your microphone.

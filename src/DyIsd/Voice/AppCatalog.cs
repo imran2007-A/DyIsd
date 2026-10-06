@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace DyIsd.Voice;
@@ -11,8 +12,9 @@ namespace DyIsd.Voice;
 public sealed record InstalledApp(string Name, string AppId);
 
 /// <summary>
-/// Every app in your Start menu (desktop and Store apps), from Windows' own list
-/// (PowerShell's Get-StartApps). Read in the background, cached to disk, refreshed every 30 min.
+/// Every app you can say "open …" to: the Start menu (desktop and Store apps, from Windows' own
+/// list), plus desktop shortcuts and Epic Games / Steam games that aren't in the Start menu.
+/// Read in the background, cached to disk, refreshed every 30 min.
 /// </summary>
 public static class AppCatalog
 {
@@ -63,20 +65,33 @@ public static class AppCatalog
                 p.WaitForExit(15000);
                 return output;
             });
-            using var doc = JsonDocument.Parse(json);
             var list = new List<InstalledApp>();
-            foreach (var e in doc.RootElement.EnumerateArray())
+            try
             {
-                var name = e.GetProperty("Name").GetString() ?? "";
-                var id = e.GetProperty("AppID").GetString() ?? "";
-                if (name.Length > 0 && id.Length > 0) list.Add(new InstalledApp(name, id));
+                using var doc = JsonDocument.Parse(json);
+                var items = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().ToList() : new List<JsonElement> { doc.RootElement };
+                foreach (var e in items)
+                {
+                    var name = e.GetProperty("Name").GetString() ?? "";
+                    var id = e.GetProperty("AppID").GetString() ?? "";
+                    if (name.Length > 0 && id.Length > 0) list.Add(new InstalledApp(name, id));
+                }
             }
+            catch (Exception ex) { Log.Error("start apps", ex); }
+            int start = list.Count;
+
+            // Games and shortcuts the Start menu doesn't list. The Start menu wins on duplicates.
+            var extra = await Task.Run(() => Desktop().Concat(EpicGames()).Concat(SteamGames()).ToList());
+            var known = new HashSet<string>(list.Select(a => Normalize(a.Name)));
+            foreach (var a in extra)
+                if (known.Add(Normalize(a.Name))) list.Add(a);
+
             if (list.Count > 0)
             {
                 _apps = list;
                 Directory.CreateDirectory(Log.Dir);
                 File.WriteAllText(CacheFile, JsonSerializer.Serialize(list));
-                Log.Write($"apps: {list.Count} in the Start menu");
+                Log.Write($"apps: {start} in the Start menu, {list.Count - start} more from the desktop, Epic and Steam");
             }
         }
         catch (Exception ex)
@@ -146,8 +161,111 @@ public static class AppCatalog
         string.Join(' ', new string(s.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : ' ').ToArray())
             .Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-    public static void Launch(InstalledApp app) =>
-        Process.Start(new ProcessStartInfo("explorer.exe", $"shell:AppsFolder\\{app.AppId}") { UseShellExecute = true });
+    /// <summary>AppIds starting with this are a shortcut file, game link or exe, not a Start-menu id.</summary>
+    const string Direct = "launch:";
+
+    public static void Launch(InstalledApp app)
+    {
+        if (app.AppId.StartsWith(Direct))
+            Process.Start(new ProcessStartInfo(app.AppId[Direct.Length..]) { UseShellExecute = true });
+        else
+            Process.Start(new ProcessStartInfo("explorer.exe", $"shell:AppsFolder\\{app.AppId}") { UseShellExecute = true });
+    }
+
+    /// <summary>Names worth teaching the speech engine: games and less common apps first.</summary>
+    public static IEnumerable<string> SpokenNames(int max) =>
+        Apps.OrderBy(a => a.AppId.StartsWith(Direct) ? 0 : 1)
+            .Select(a => a.Name)
+            .Where(n => n.Length is > 2 and < 24 && !Regex.IsMatch(n, @"uninstall|readme|help|documentation|website|manual|license|release notes|support", RegexOptions.IgnoreCase))
+            .Distinct()
+            .Take(max);
+
+    // ---------------- things the Start menu misses ----------------
+
+    static readonly Regex Junk = new(@"uninstall|readme|help|documentation|manual|license|release notes|website|redistributable|steamworks|directx|vcredist", RegexOptions.IgnoreCase);
+
+    /// <summary>Shortcuts on your desktop and the shared desktop (.lnk, .url).</summary>
+    static IEnumerable<InstalledApp> Desktop()
+    {
+        var found = new List<InstalledApp>();
+        foreach (var dir in new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) })
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) continue;
+                foreach (var f in Directory.EnumerateFiles(dir))
+                {
+                    var ext = Path.GetExtension(f).ToLowerInvariant();
+                    if (ext is not (".lnk" or ".url" or ".appref-ms")) continue;
+                    var name = Path.GetFileNameWithoutExtension(f);
+                    if (!Junk.IsMatch(name)) found.Add(new InstalledApp(name, Direct + f));
+                }
+            }
+            catch (Exception ex) { Log.Write("desktop shortcuts: " + ex.Message); }
+        }
+        return found;
+    }
+
+    /// <summary>Installed Epic Games titles (Fortnite, Rocket League…), from the launcher's own records.</summary>
+    static IEnumerable<InstalledApp> EpicGames()
+    {
+        var found = new List<InstalledApp>();
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic", "EpicGamesLauncher", "Data", "Manifests");
+        try
+        {
+            if (!Directory.Exists(dir)) return found;
+            foreach (var f in Directory.EnumerateFiles(dir, "*.item"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(f));
+                    var r = doc.RootElement;
+                    string Get(string k) => r.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+                    var name = Get("DisplayName");
+                    var appName = Get("AppName");
+                    if (name.Length == 0 || appName.Length == 0 || Junk.IsMatch(name)) continue;
+                    var ns = Get("CatalogNamespace");
+                    var item = Get("CatalogItemId");
+                    var id = ns.Length > 0 && item.Length > 0 ? $"{ns}%3A{item}%3A{appName}" : appName;
+                    found.Add(new InstalledApp(name, Direct + $"com.epicgames.launcher://apps/{id}?action=launch&silent=true"));
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex) { Log.Write("epic games: " + ex.Message); }
+        return found;
+    }
+
+    /// <summary>Installed Steam games, from Steam's library folders.</summary>
+    static IEnumerable<InstalledApp> SteamGames()
+    {
+        var found = new List<InstalledApp>();
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            var steam = (key?.GetValue("SteamPath") as string)?.Replace('/', '\\');
+            if (string.IsNullOrEmpty(steam)) return found;
+            var libraries = new List<string> { Path.Combine(steam, "steamapps") };
+            var vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
+            if (File.Exists(vdf))
+                foreach (Match m in Regex.Matches(File.ReadAllText(vdf), "\"path\"\\s+\"([^\"]+)\""))
+                    libraries.Add(Path.Combine(m.Groups[1].Value.Replace("\\\\", "\\"), "steamapps"));
+            foreach (var lib in libraries.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!Directory.Exists(lib)) continue;
+                foreach (var f in Directory.EnumerateFiles(lib, "appmanifest_*.acf"))
+                {
+                    var text = File.ReadAllText(f);
+                    var id = Regex.Match(text, "\"appid\"\\s+\"(\\d+)\"").Groups[1].Value;
+                    var name = Regex.Match(text, "\"name\"\\s+\"([^\"]+)\"").Groups[1].Value;
+                    if (id.Length > 0 && name.Length > 0 && !Junk.IsMatch(name))
+                        found.Add(new InstalledApp(name, Direct + $"steam://rungameid/{id}"));
+                }
+            }
+        }
+        catch (Exception ex) { Log.Write("steam games: " + ex.Message); }
+        return found;
+    }
 }
 
 /// <summary>How alike two phrases are, 0..1, tolerant of speech-recognition slips.</summary>
