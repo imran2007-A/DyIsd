@@ -91,7 +91,7 @@ public static class AppleMusic
         for (int attempt = 0; attempt < 8; attempt++)
         {
             Thread.Sleep(700);
-            var items = Uia.Find(win, ControlType.ListItem, ControlType.DataItem, ControlType.Button, ControlType.Hyperlink, ControlType.Group)
+            var items = Uia.Find(win, ControlType.ListItem, ControlType.DataItem, ControlType.Button, ControlType.Hyperlink, ControlType.Group, ControlType.Text, ControlType.Custom)
                 .Where(n => n.Name.Length > 0 && n.Element != box.Element).ToList();
             var matches = items.Where(n =>
             {

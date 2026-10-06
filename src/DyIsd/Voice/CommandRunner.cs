@@ -253,7 +253,10 @@ public sealed class CommandRunner
                         return ok ? Good("\uE717", $"Calling {Title(who)}") : Bad("Couldn't start the Discord call");
                     });
                 }
-            case "yt-play": return await YouTubePlayAsync(c.Text);
+            case "yt-play":
+                // Plain "play X" goes to Apple Music when that's what you're using; otherwise YouTube.
+                if (c.N == 0 && UsingAppleMusic()) return await AppleMusic.PlayAsync(c.Text, this);
+                return await YouTubePlayAsync(c.Text);
             case "mic":
                 {
                     bool mute = c.Text == "mute";
@@ -579,6 +582,14 @@ public sealed class CommandRunner
         return Ok("\uE768", "Playing " + Title(which));
     }
 
+    bool UsingAppleMusic()
+    {
+        var fg = _app.Foreground.Current;
+        if (fg == "applemusic") return true;
+        var m = _app.Media.State;
+        return m.HasSession && m.Processes.Any(p => p.Equals("applemusic", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Ends whatever call you're on, using that app's own hang-up button.</summary>
     async Task<Reply> HangUpAsync()
     {
@@ -744,6 +755,7 @@ public sealed class CommandRunner
                 return Ok("\uE7B3", "Hiding the island. Tray icon brings it back.");
             case "show":
                 _app.IslandPaused = false;
+                _app.Island?.RestoreDismissed();
                 return Ok("\uE7B3", "Island's back");
             case "settings":
                 _app.OpenControlCenter();

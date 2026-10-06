@@ -312,7 +312,8 @@ public static class CommandParser
 
         // ----- the island and Jarvis itself -----
         Add(@"(?:hide|pause|close|minimi[sz]e) (?:the )?(?:island|dynamic island|dyisd)|go away island", (_, _) => new Cmd("island", "hide"));
-        Add(@"(?:show|unhide|resume|bring back|open) (?:the )?(?:island|dynamic island|dyisd)", (_, _) => new Cmd("island", "show"));
+        Add(@"(?:show|unhide|resume|bring back|open) (?:the )?(?:island|dynamic island|dyisd)(?: again| back)?|bring (?:it|that|the island|the music|the timer|everything) back|bring back (?:it|that|everything|what i hid|the hidden|hidden)|show (?:it|that|everything|what i hid|hidden(?: stuff)?) again|unhide(?: it| that| everything)?|undo (?:the )?(?:flick|hide)|show hidden(?: stuff)?",
+            (_, _) => new Cmd("island", "show"));
         Add(@"(?:move|put|snap) (?:the )?island (?:to )?(?:the )?(left|right|center|centre|middle)(?: side)?", (m, _) => new Cmd("island", m.Groups[1].Value is "left" or "right" ? m.Groups[1].Value : "center"));
         Add(@"(?:open |show )?(?:the |your )?(?:control center|control centre|island settings|dyisd settings|jarvis settings|your settings)", (_, _) => new Cmd("island", "settings"));
         Add(@"stop listening|go to sleep|sleep jarvis|jarvis sleep|go sleep|be quiet|shut up|stop listening for (?:your name|jarvis|me)|dont listen|stop hearing", (_, _) => new Cmd("jarvis", "sleep"));
@@ -332,7 +333,9 @@ public static class CommandParser
         Add(@"(?:mute|unmute|toggle mute on) (?:me|my mic|my microphone|the mic|the microphone|mic|microphone|myself|my voice)|(?:mute|unmute) (?:me )?(?:in|on) (?:the )?(?:call|discord|whatsapp|meeting)|mic (?:on|off)|microphone (?:on|off)",
             (m, _) => new Cmd("mic", m.Value.Contains("unmute") || m.Value.EndsWith(" on") ? "unmute" : "mute"));
         // ----- Discord -----
-        Add(@"(?:deafen|undeafen|toggle deafen)(?: me| myself)?(?: (?:in|on) discord)?|(?:turn (?:on|off) )?deafen", (_, _) => new Cmd("discord", "deafen"));
+        // Whisper often writes "deafen" as "defend", "deaf in", "death in", "the fan".
+        Add(@"(?:un ?)?(?:deafen|deafin|deafan|defend|defen|deaf in|deaf and|death in|deafening)(?: me| myself| it)?(?: (?:in|on) discord)?|(?:toggle |turn (?:on|off) )?(?:deafen|deaf mode)|(?:deafen|defend) (?:me|myself)|(?:mute|turn off) (?:discord audio|discord sound|everyone|all voices)",
+            (_, _) => new Cmd("discord", "deafen"));
         Add(@"(?:leave|exit|quit)(?: the)? (?:voice|vc|voice chat|voice channel|call|channel|discord call)(?: (?:on|in) discord)?", (_, _) => new Cmd("hangup"));
         Add(@"join(?: (?:the|a|my))?(?: (.+?))?",
             (m, _) =>
@@ -357,7 +360,7 @@ public static class CommandParser
         Add(@"(?:play|start|put on|open and play)(?: (?:some|a|my|the))? (?:apple music|music app|the music app|itunes|spotify|my music)|(?:play|start|put on)(?: (?:some|a|any|my|the))? (?:song|songs|music|track)s? (?:on|in|from|with) (?:apple music|music|itunes|spotify|the music app)",
             (m, _) => new Cmd("play-app", m.Value.Contains("spotify") ? "spotify" : "apple music"));
         // "play believer on apple music": search Apple Music and play the first result.
-        Add(@"play (.+?) (?:on|in|from|with|using) (?:apple music|music|itunes|the music app)", (m, _) => new Cmd("applemusic", m.Groups[1].Value));
+        Add(@"play (.+?) (?:on|in|from|with|using) (?:apple music|apple|apples music|app music|apple music app|music|itunes|i tunes|the music app)", (m, _) => new Cmd("applemusic", m.Groups[1].Value));
 
         // ----- questions Jarvis answers itself -----
         Add(@"(?:whats|tell me|say) (?:the )?time(?: (?:now|right now|is it|it is))?|what time is it(?: now| right now)?|time(?: now| please| check)?|current time|what time it is|whats the time now|time right now",
@@ -443,7 +446,8 @@ public static class CommandParser
             (m, o) =>
             {
                 var q = First(m);
-                return q.Length == 0 ? null : new Cmd("yt-play", q, Say: $"YouTube · {q}");
+                bool youtube = Regex.IsMatch(m.Value, @"\b(youtube|yt)\b");
+                return q.Length == 0 ? null : new Cmd("yt-play", q, N: youtube ? 1 : 0, Say: $"YouTube · {q}");
             });
 
         // ----- search -----

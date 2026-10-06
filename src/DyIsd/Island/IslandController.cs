@@ -280,6 +280,13 @@ public sealed class IslandController
         Render();
     }
 
+    /// <summary>"Bring it back": shows everything you flicked away.</summary>
+    public void RestoreDismissed()
+    {
+        _dismissed.Clear();
+        Render();
+    }
+
     /// <summary>Flicked up: a pop-up closes; an activity hides until it changes.</summary>
     void OnFlick()
     {

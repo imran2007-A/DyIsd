@@ -71,17 +71,18 @@ public static class WhatsApp
         for (int attempt = 0; attempt < 6; attempt++)
         {
             Thread.Sleep(600);
-            var items = Uia.Find(win, ControlType.ListItem, ControlType.Button, ControlType.DataItem, ControlType.Group)
+            // Chat rows can be list items, buttons, groups or just text, depending on the WhatsApp version.
+            var items = Uia.Find(win, ControlType.ListItem, ControlType.Button, ControlType.DataItem, ControlType.Group, ControlType.Text, ControlType.Custom, ControlType.Hyperlink)
                 .Where(n => n.Name.Length > 0 && n.Element != box.Element).ToList();
             var scored = items.Select(n => (Node: n, Name: ContactName(n.Name), Score: AppDriver.NameScore(who, ContactName(n.Name))))
                 .Where(x => x.Score >= 0.75)
-                .OrderByDescending(x => x.Score).ToList();
+                .OrderByDescending(x => x.Score).ThenBy(x => x.Name.Length).ToList(); // ties: the contact row, not a message mentioning them
             if (scored.Count == 0) continue;
             Log.Write("whatsapp sees: " + string.Join(" | ", scored.Take(6).Select(x => $"{x.Name} ({x.Score:0.00})")));
             var best = scored[0];
             return new Found(best.Name, win, best.Node.Element);
         }
-        Log.Write("whatsapp: nobody matched \"" + who + "\"; list shows: " + AppDriver.Describe(win, 12, ControlType.ListItem, ControlType.Button));
+        Log.Write("whatsapp: nobody matched \"" + who + "\"; window shows: " + AppDriver.Describe(win, 25, ControlType.ListItem, ControlType.Button, ControlType.Text, ControlType.Group, ControlType.Custom));
         return null;
     }
 

@@ -158,7 +158,7 @@ public sealed class JarvisService : IDisposable
     async Task OnPhraseAsync(float[] samples)
     {
         if (_busy || _ptt || !S.JarvisEnabled) return;
-        if (_app.Calls.State.IsActive) return; // never act on what you say to people on a call
+        // Works during calls too: it only acts when you say "Jarvis" first.
         bool armed = DateTime.Now < _armedUntil;
         await HearAsync(samples, requireWake: !armed);
     }

@@ -83,7 +83,7 @@ public sealed class SpeechEngine : IDisposable
         return string.Join(", ", names) + ". " +
                "Jarvis, open Spotify. Jarvis, search YouTube for lofi beats. Type hello and press enter. " +
                "Volume up. Max brightness. Dim the brightness. Close this tab. Scroll down. Play Believer on Apple Music. " +
-               "100 divided by 8. Open Prime Video. Turn off Bluetooth. Mute me. Jarvis, launch Fortnite. Jarvis.";
+               "100 divided by 8. Deafen. Undeafen. Bring it back. Mute me. Jarvis, launch Fortnite. Jarvis.";
     }
 
     async Task DownloadAsync()

@@ -911,7 +911,18 @@ public partial class ControlCenter : Window
         {
             if (!listening) return;
             var key = e.Key == Key.System ? e.SystemKey : e.Key;
-            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+            // Right Ctrl / Right Alt on their own are common Discord mute keys.
+            if (key is Key.RightCtrl or Key.RightAlt)
+            {
+                e.Handled = true;
+                listening = false;
+                S.DiscordMuteKey = KeyInterop.VirtualKeyFromKey(key);
+                S.DiscordMuteModifiers = 0;
+                SettingsStore.Save();
+                btn.Content = ShortcutText();
+                return;
+            }
+            if (key is Key.LeftCtrl or Key.LeftAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
             e.Handled = true;
             listening = false;
             if (key is Key.Escape or Key.Back or Key.Delete)
@@ -1006,18 +1017,7 @@ public partial class ControlCenter : Window
         return string.Join(" + ", parts);
     }
 
-    static string ShortcutText()
-    {
-        if (S.DiscordMuteKey == 0) return "Set";
-        int m = S.DiscordMuteModifiers;
-        var parts = new List<string>();
-        if ((m & Native.Win32.MOD_KEY_CTRL) != 0) parts.Add("Ctrl");
-        if ((m & Native.Win32.MOD_KEY_ALT) != 0) parts.Add("Alt");
-        if ((m & Native.Win32.MOD_KEY_SHIFT) != 0) parts.Add("Shift");
-        if ((m & Native.Win32.MOD_KEY_WIN) != 0) parts.Add("Win");
-        parts.Add(KeyInterop.KeyFromVirtualKey(S.DiscordMuteKey).ToString());
-        return string.Join(" + ", parts);
-    }
+    static string ShortcutText() => S.DiscordMuteKey == 0 ? "Set" : KeyText(S.DiscordMuteKey, S.DiscordMuteModifiers);
 
     ToggleButton AddOption(string title, string? help, Func<bool> get, Action<bool> set)
     {
