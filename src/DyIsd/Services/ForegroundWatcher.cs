@@ -14,6 +14,9 @@ public sealed class ForegroundWatcher : IDisposable
     /// <summary>Process name of the app in front, lowercase, without ".exe" (e.g. "chrome").</summary>
     public string Current { get; private set; } = "";
     public event Action? Changed;
+    /// <summary>The monitor the app in front is on (so the island can follow you).</summary>
+    public IntPtr Monitor { get; private set; }
+    public event Action? MonitorChanged;
 
     IntPtr _hook;
     Win32.WinEventProc? _proc; // kept alive so the garbage collector doesn't free it
@@ -33,7 +36,14 @@ public sealed class ForegroundWatcher : IDisposable
     void Update(IntPtr hwnd)
     {
         string name = NameOf(hwnd);
-        if (name.Length == 0 || name == "dyisd" || name == Current) return; // ignore our own windows
+        if (name.Length == 0 || name == "dyisd") return; // ignore our own windows
+        var mon = Monitors.Working(hwnd);
+        if (mon != IntPtr.Zero && mon != Monitor)
+        {
+            Monitor = mon;
+            MonitorChanged?.Invoke();
+        }
+        if (name == Current) return;
         Current = name;
         Log.Write("in front: " + name);
         Changed?.Invoke();

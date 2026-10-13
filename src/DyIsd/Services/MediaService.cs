@@ -96,8 +96,11 @@ public sealed class MediaService
             State.Processes = ProcessNames(s.SourceAppUserModelId);
             if (State.Processes.Length == 0) State.Processes = new[] { State.Source.ToLowerInvariant() };
             Log.Write($"playing from: {s.SourceAppUserModelId} (matches: {string.Join(", ", State.Processes)})");
-            State.BarBrush = State.Source == "Spotify" ? SpotifyGreen : Brushes.White;
-            State.ArtBrush = (p.Thumbnail != null ? await LoadArtAsync(p.Thumbnail) : null) ?? FallbackArt(State.Title);
+            var (art, color) = p.Thumbnail != null ? await LoadArtAsync(p.Thumbnail) : (null, null);
+            State.ArtBrush = art ?? FallbackArt(State.Title);
+            // Like the iPhone: the bars (and the glow round the island) take the album's colour.
+            State.ArtColor = color;
+            State.BarBrush = color is Color c ? ThemeService.Solid(c) : State.Source == "Spotify" ? SpotifyGreen : Brushes.White;
         }
         catch (Exception ex)
         {
@@ -230,7 +233,7 @@ public sealed class MediaService
     static string Format(TimeSpan t) =>
         t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{(int)t.TotalMinutes}:{t.Seconds:00}";
 
-    static async Task<Brush?> LoadArtAsync(IRandomAccessStreamReference reference)
+    static async Task<(Brush?, Color?)> LoadArtAsync(IRandomAccessStreamReference reference)
     {
         try
         {
@@ -248,7 +251,43 @@ public sealed class MediaService
             bmp.Freeze();
             var brush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
             brush.Freeze();
-            return brush;
+            return (brush, Vibrant(bmp));
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
+
+    /// <summary>
+    /// The album art's most colourful shade, brightened so it reads on black. Null for black,
+    /// white or grey covers (they get no glow).
+    /// </summary>
+    internal static Color? Vibrant(BitmapSource bmp)
+    {
+        try
+        {
+            var small = new TransformedBitmap(bmp, new ScaleTransform(16.0 / bmp.PixelWidth, 16.0 / bmp.PixelHeight));
+            var f = new FormatConvertedBitmap(small, PixelFormats.Bgra32, null, 0);
+            int w = f.PixelWidth, h = f.PixelHeight;
+            var px = new byte[w * h * 4];
+            f.CopyPixels(px, w * 4, 0);
+            double r = 0, g = 0, b = 0, total = 0;
+            for (int i = 0; i < px.Length; i += 4)
+            {
+                double bb = px[i] / 255.0, gg = px[i + 1] / 255.0, rr = px[i + 2] / 255.0;
+                double max = Math.Max(rr, Math.Max(gg, bb)), min = Math.Min(rr, Math.Min(gg, bb));
+                double sat = max == 0 ? 0 : (max - min) / max;
+                double weight = sat * sat * max; // colourful and not dark
+                r += rr * weight; g += gg * weight; b += bb * weight; total += weight;
+            }
+            if (total < 0.6) return null; // greyscale cover
+            r /= total; g /= total; b /= total;
+            // Push to a bright, saturated version of the same hue.
+            double mx = Math.Max(r, Math.Max(g, b)), mn = Math.Min(r, Math.Min(g, b));
+            double s = mx == 0 ? 0 : (mx - mn) / mx, v = Math.Max(mx, 0.85), s2 = Math.Clamp(s, 0.45, 0.8);
+            byte Hsv(double ch) => (byte)Math.Round(255 * v * (1 - s2 * (1 - (mx == mn ? 1 : (ch - mn) / (mx - mn)))));
+            return Color.FromRgb(Hsv(r), Hsv(g), Hsv(b));
         }
         catch
         {

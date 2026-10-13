@@ -67,6 +67,14 @@ kbd{font:600 11.5px/1 "Noto Sans",sans-serif;border:1px solid var(--line);border
 .stage[data-pos=left] .island{transform-origin:0 0}
 .stage[data-pos=right] .island{transform-origin:100% 0}
 .island.hidden{opacity:0;transform:scale(.5);pointer-events:none}
+.island{transition-property:width,height,border-radius,left,opacity,transform,box-shadow}
+.ib[aria-pressed="true"]{position:relative}
+.ib[aria-pressed="true"]::after{content:"";position:absolute;bottom:1px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#fff}
+.outrow{display:flex;align-items:center;gap:10px;width:100%;height:36px;border:0;border-radius:10px;background:transparent;color:#fff;font:500 13px var(--ios);padding:0 10px;cursor:pointer}
+.outrow:hover{background:rgba(255,255,255,.12)}.outrow .ck{color:#0A84FF;font-weight:700;width:14px}
+.chg circle.v{animation:chg 1.1s cubic-bezier(.2,.8,.2,1) both}
+@keyframes chg{from{stroke-dashoffset:100}}
+.slidein{animation:slidein .42s cubic-bezier(.3,1.35,.5,1)}@keyframes slidein{from{transform:translateX(var(--sx))}}
 .island{cursor:pointer}
 .slider{position:relative;flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.2);cursor:pointer;touch-action:none}
 .slider::before{content:"";position:absolute;inset:-9px 0}
@@ -382,6 +390,8 @@ const I={
   cal:sv('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>'),
   down:sv('<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>'),
   check:sv('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
+  spark:sv('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>'),
+  back:sv('<path d="m14.5 6-6 6 6 6"/>'),
   clock:sv('<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.8M9.5 2.5h5"/>'),
   moon:sv('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" fill="currentColor"/>'),
   head:sv('<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="14" width="5" height="7" rx="2" fill="currentColor"/>'),
@@ -430,13 +440,14 @@ const S={
   pos:'center',fg:'word',pausedHere:false,shuffle:false,repeat:0,
   call:{app:'whatsapp',who:'Rahul',since:0,muted:false},discordKey:'Ctrl + Shift + M',
   f:{media:true,volume:true,brightness:true,battery:true,clipboard:true,downloads:true,calls:true,earbuds:true,deadlines:true,focus:true,clock:true,transfers:true},
-  opt:{replaceVol:true,showClip:true,fullscreen:true,startup:true,wake:true,jsounds:true},
+  opt:{replaceVol:true,showClip:true,fullscreen:true,glow:true,startup:true,wake:true,jsounds:true},
+  outSel:0,outOpen:false,
   clock:{mode:'timer',t:300},ring:{app:'whatsapp',who:'Amma'},xfer:{title:'Sending · Bluetooth',file:'Resume_Imran.pdf',pct:0},
   muted:false,dismissed:{},pref:null,prefPair:null,
   jarvis:{ready:false,dl:-1,on:true,pending:null,key:'Ctrl + Space',
     modes:[{name:'Claude mode',close:true,steps:[{k:'open',v:'Claude'},{k:'playlist',v:'Chill Vibes'},{k:'volume',v:'30'}]},
            {name:'Lab mode',close:true,steps:[{k:'open',v:'VS Code'},{k:'open',v:'Chrome'},{k:'focus',v:'50'}]}],
-    contacts:[{name:'Rahul',num:'919876543210'}]},
+    contacts:[{name:'Rahul',num:'919876543210'}],brainKey:''},
   focusMin:25,
   acts:{},             // kind -> {app, since}
   media:{app:'spotify',idx:0,t:62,playing:true},
@@ -465,9 +476,9 @@ const save=()=>{try{localStorage.setItem('dyisd-proto2',JSON.stringify({pos:S.po
 try{if(JSON.parse(localStorage.getItem('dyisd-proto2')||'{}').jready)S.jarvis.ready=true}catch(e){}
 
 const TRACKS=[
-  {title:'Hukum',artist:'Anirudh Ravichander',dur:204,art:'linear-gradient(135deg,#f7b733,#fc4a1a)'},
-  {title:'Chaleya',artist:'Arijit Singh, Shilpa Rao',dur:200,art:'linear-gradient(135deg,#43cea2,#185a9d)'},
-  {title:'Blinding Lights',artist:'The Weeknd',dur:202,art:'linear-gradient(135deg,#ee0979,#2b1055)'}
+  {title:'Hukum',artist:'Anirudh Ravichander',dur:204,art:'linear-gradient(135deg,#f7b733,#fc4a1a)',glow:'#FF8A3D'},
+  {title:'Chaleya',artist:'Arijit Singh, Shilpa Rao',dur:200,art:'linear-gradient(135deg,#43cea2,#185a9d)',glow:'#4FD1C5'},
+  {title:'Blinding Lights',artist:'The Weeknd',dur:202,art:'linear-gradient(135deg,#ee0979,#2b1055)',glow:'#FF4DA6'}
 ];
 const trk=()=>TRACKS[S.media.idx];
 
@@ -508,7 +519,7 @@ function visibleAct(){return activities()[0]||null}
 /* ---------- views ---------- */
 const CV={
   media:()=>S.pausedHere&&!S.media.playing?{kind:'media-dot',sig:'',w:14,h:14,r:7,html:''}:({kind:'media-c',sig:S.media.idx+'|'+S.media.playing,w:190,h:34,r:17,
-    html:`<div class="row compact"><div class="art sm" style="background:${trk().art}"></div><div class="grow"></div><div class="eq ${S.media.playing?'on':''}" style="--c:${S.media.app==='spotify'?'#1DB954':'#fff'}"><i></i><i></i><i></i><i></i></div></div>`}),
+    html:`<div class="row compact"><div class="art sm" style="background:${trk().art}"></div><div class="grow"></div><div class="eq ${S.media.playing?'on':''}" style="--c:${S.opt.glow!==false?trk().glow:S.media.app==='spotify'?'#1DB954':'#fff'}"><i></i><i></i><i></i><i></i></div></div>`}),
   timer:()=>({kind:'timer-c',sig:'',w:150,h:34,r:17,
     html:`<div class="row compact">${ring(S.timer.left/S.timer.total*100,19)}<div class="grow"></div><span class="lbl tnum js-tleft" style="color:#FF9F0A">${fmt(S.timer.left)}</span></div>`}),
   download:()=>({kind:'dl-c',sig:'',w:150,h:34,r:17,
@@ -525,8 +536,8 @@ const EV={
   media:()=>{const t=trk(),m=S.media;return{kind:'media-e',sig:[m.idx,m.playing,S.shuffle,S.repeat].join('|'),w:366,h:208,r:34,
     html:`<div class="row"><div class="art lg" style="background:${t.art}"></div><div class="grow"><div class="t1">${t.title}</div><div class="t2">${t.artist}</div><div class="t2" style="font-size:11px">${m.app==='chrome'?'YouTube · Chrome':'Spotify'}</div></div><button class="ib small" data-a="jump" aria-label="Open the app" style="align-self:flex-start">${I.open}</button></div>
     <div class="prog"><span class="tnum js-cur" style="width:30px">${fmt(m.t)}</span><div class="slider" data-slider="seek"><i class="js-prog" style="width:${m.t/t.dur*100}%"></i></div><span class="tnum js-rem" style="width:34px;text-align:right">-${fmt(t.dur-m.t)}</span></div>
-    <div class="pl-row"><button class="ib small ${S.shuffle?'':'dim'}" data-a="shuffle" aria-label="Shuffle" aria-pressed="${S.shuffle}">${I.shuffle}</button><button class="ib flip" data-a="prev" aria-label="Previous">${I.next}</button><button class="ib big" data-a="toggle" aria-label="${m.playing?'Pause':'Play'}">${m.playing?I.pause:I.play}</button><button class="ib" data-a="next" aria-label="Next">${I.next}</button><button class="ib small ${S.repeat?'':'dim'}" data-a="repeat" aria-label="Repeat" style="position:relative">${I.repeat}${S.repeat===1?'<b style="position:absolute;font:700 8px var(--ios);right:4px;bottom:3px">1</b>':''}</button></div>
-    <div class="vol-row"><div class="ic">${I.spk(20)}</div><div class="slider" data-slider="vol"><i class="js-vol" style="width:${S.vol}%"></i></div><div class="ic">${I.spk(100)}</div></div>`}},
+    <div class="pl-row"><button class="ib small ${S.shuffle?'':'dim'}" data-a="shuffle" aria-label="Shuffle" aria-pressed="${S.shuffle}">${I.shuffle}</button><button class="ib flip" data-a="prev" aria-label="Previous">${I.next}</button><button class="ib big" data-a="toggle" aria-label="${m.playing?'Pause':'Play'}">${m.playing?I.pause:I.play}</button><button class="ib" data-a="next" aria-label="Next">${I.next}</button><button class="ib small ${S.repeat?'':'dim'}" data-a="repeat" aria-label="Repeat" aria-pressed="${!!S.repeat}" style="position:relative">${I.repeat}${S.repeat===1?'<b style="position:absolute;font:700 8px var(--ios);right:4px;bottom:3px">1</b>':''}</button></div>
+    <div class="vol-row"><div class="ic">${I.spk(20)}</div><div class="slider" data-slider="vol"><i class="js-vol" style="width:${S.vol}%"></i></div><div class="ic">${I.spk(100)}</div><button class="ib small" data-a="outputs" aria-label="Play on… (speakers, headphones)" title="Play on…" style="margin-left:2px">${OUTS[S.outSel].head?I.head:I.spk(100)}</button></div>`}},
   call:()=>({kind:'call-e',sig:String(S.call.muted),w:360,h:84,r:34,
     html:`<div class="row"><div class="avatar" style="background:${APPS[S.call.app].color}">${esc(S.call.who[0])}</div><div class="grow"><div class="t1" style="font-size:15px">${esc(S.call.who)}</div><div class="t2 tnum js-callsub">${APPS[S.call.app].name} · ${fmt((Date.now()-S.call.since)/1000)}</div></div>
     <button class="cbtn mute ${S.call.muted?'on':''}" data-a="mute" aria-label="${S.call.muted?'Unmute':'Mute'}">${S.call.muted?I.micoff:I.mic}</button><button class="cbtn go" data-a="jump" aria-label="Go to the call">${I.open}</button></div>`}),
@@ -559,7 +570,7 @@ const card=(w,h,html,kind)=>({kind,sig:html,w,h,r:Math.min(h/2,30),html});
 const TV={
   volume:()=>pill(270,`<div class="ic">${I.spk(S.vol)}</div><div class="bar"><i style="width:${S.vol}%"></i></div><span class="val">${S.vol}</span>`,'vol'),
   brightness:()=>pill(270,`<div class="ic">${I.sun}</div><div class="bar"><i style="width:${S.bri}%"></i></div><span class="val">${S.bri}</span>`,'bri'),
-  charge:()=>pill(210,`<div class="ic" style="color:#30D158">${I.bolt}</div><span class="lbl">Charging</span><div class="grow"></div><span class="val" style="color:#30D158">64%</span><div class="ic" style="color:#30D158;width:24px">${I.batt(64)}</div>`,'charge'),
+  charge:()=>pill(220,`<div class="ic" style="color:#30D158">${I.bolt}</div><span class="lbl">Charging</span><div class="grow"></div><span class="chg" style="position:relative;display:grid;place-items:center;width:28px;height:28px">${ring(64,28,'#30D158')}<b style="position:absolute;font:700 9px var(--ios);color:#30D158">64</b></span>`,'charge'),
   lowbat:()=>pill(300,`<div class="ic" style="color:#FF453A;width:24px">${I.batt(15)}</div><span class="lbl">Low battery · 15%</span><div class="grow"></div><button class="pb sm" data-a="saver">Saver</button>`,'lowbat'),
   saver:()=>pill(220,`<div class="ic" style="color:#FFD60A;width:24px">${I.batt(15)}</div><span class="lbl">Energy saver on</span>`,'saver'),
   clip:d=>card(350,58,`<div class="row"><div class="ic" style="color:#0A84FF">${I.clip}</div><div class="grow"><div class="lbl">Copied · ${d.length} characters</div>${S.opt.showClip?`<div class="t2 mono">${esc(d)}</div>`:''}</div></div>`,'clip'),
@@ -572,6 +583,7 @@ const TV={
   jarvis:d=>({kind:'jarvis',sig:d.text+d.listening,w:270,h:40,r:20,html:`<div class="row compact" style="margin-left:-5px"><div class="orb"><div class="ic">${I.mic}</div></div><span class="lbl grow">${esc(d.text)}</span>${d.listening?'<div class="jwave js-jwave"><i></i><i></i><i></i><i></i><i></i></div>':'<div class="eq on" style="--c:#BF5AF2"><i></i><i></i><i></i><i></i></div>'}</div>`}),
   jcard:d=>{const w=Math.max(230,Math.min(392,70+Math.max(d.t.length*7.4,(d.s||'').length*6.4)+(d.yes?130:0)));
     return card(w,d.s?58:44,`<div class="row"><div class="ic" style="color:${d.c||'#0A84FF'}">${d.i}</div><div class="grow"><div class="lbl">${esc(d.t)}</div>${d.s?`<div class="t2">${esc(d.s)}</div>`:''}</div>${d.yes?`<button class="pb sm w" data-a="${d.yes}">${d.yesL||'Yes'}</button><button class="pb sm" data-a="${d.no}">${d.noL||'No'}</button>`:''}</div>`,'jcard'+d.t)},
+  answer:d=>card(392,40+Math.min(4,Math.ceil(d.t.length/46))*19+18,`<div class="row" style="align-items:flex-start"><div class="ic" style="color:#BF5AF2">${I.spark}</div><div class="grow"><div style="font:500 13.5px/19px var(--ios);white-space:normal">${esc(d.t)}</div><div class="t2">${esc(d.s)}</div></div></div>`,'answer'),
   msg:d=>pill(d.w||300,`<div class="ic" style="color:${d.c||'#fff'}">${d.i}</div><span class="lbl">${d.t}</span>`,'msg')
 };
 
@@ -580,13 +592,18 @@ let cur={kind:null,sig:null};
 function leftFor(w){return S.pos==='left'?EDGE:S.pos==='right'?W-w-EDGE:(W-w)/2}
 const bubble=$('#bubble');
 let bubbleKind=null;
+const OUTS=[{n:'Speakers · Realtek Audio',head:false},{n:'Galaxy Buds2 Pro',head:true},{n:'boAt Rockerz 450',head:true}];
+const outView=()=>({kind:'media-out',sig:String(S.outSel),w:366,h:Math.max(208,58+36*OUTS.length),r:34,
+  html:`<div class="row" style="margin:-4px 0 4px"><button class="ib small" data-a="outputs" aria-label="Back">${I.back}</button><span class="t1">Play on</span></div>
+  ${OUTS.map((o,i)=>`<button class="outrow" data-a="out:${i}" aria-pressed="${S.outSel===i}"><span class="ic">${o.head?I.head:I.spk(100)}</span><span class="grow" style="text-align:left">${esc(o.n)}</span><span class="ck">${S.outSel===i?'✓':''}</span></button>`).join('')}`});
 function render(){
   const list=activities(),act=list[0]||null;
   if(!act)S.expanded=false;
   let v=null;
   if(S.paused)v=null;
   else if(S.popup)v=TV[S.popup.kind](S.popup.data);
-  else if(act)v=act.kind==='ring'?EV.ring():(S.expanded?EV:CV)[act.kind]();
+  else if(act)v=act.kind==='ring'?EV.ring():S.expanded&&act.kind==='media'&&S.outOpen?outView():(S.expanded?EV:CV)[act.kind]();
+  if(!S.expanded||!act||act.kind!=='media')S.outOpen=false;
   if(!v){island.classList.add('hidden');cur={kind:null,sig:null};placeDot(null);placeBubble(null);return}
   const wasHidden=island.classList.contains('hidden');
   island.classList.remove('hidden');
@@ -596,6 +613,9 @@ function render(){
     if(!wasHidden&&cur.kind){island.classList.remove('morph');void island.offsetWidth;island.classList.add('morph')}} // liquid morph
   else if(v.sig!==cur.sig)content.innerHTML=v.html;
   cur={kind:v.kind,sig:v.sig};
+  // album-colour glow while music fills the island
+  const glow=/^media-(c|e|out)$/.test(v.kind)&&S.media.playing&&S.opt.glow!==false&&!S.popup;
+  island.style.boxShadow=glow?`0 0 22px 2px ${trk().glow}99`:'none';
   const second=!S.popup&&!S.paused&&!S.expanded&&act&&act.kind!=='ring'?list[1]:null;
   placeBubble(second?second.kind:null,v.w);
   placeDot(v.w,second?40:0);patch();updateGhost();
@@ -629,7 +649,7 @@ function patch(){
   stage.querySelectorAll('.js-calltime').forEach(e=>e.textContent=fmt((Date.now()-S.call.since)/1000));
   stage.querySelectorAll('.js-callsub').forEach(e=>e.textContent=APPS[S.call.app].name+' · '+fmt((Date.now()-S.call.since)/1000));
   stage.querySelectorAll('.js-tleft').forEach(e=>e.textContent=fmt(S.timer.left));
-  stage.querySelectorAll('.js-ring').forEach(e=>{if(!e.closest('.js-xring,.js-bxring'))e.style.strokeDashoffset=100-S.timer.left/S.timer.total*100});
+  stage.querySelectorAll('.js-ring').forEach(e=>{if(!e.closest('.js-xring,.js-bxring,.chg'))e.style.strokeDashoffset=100-S.timer.left/S.timer.total*100});
   stage.querySelectorAll('.js-dlpct').forEach(e=>e.textContent=Math.floor(S.dl.pct)+'%');
   stage.querySelectorAll('.js-dlbar').forEach(e=>e.style.width=S.dl.pct+'%');
   stage.querySelectorAll('.js-clock').forEach(e=>e.textContent=fmt(S.clock.t));
@@ -675,7 +695,14 @@ island.addEventListener('contextmenu',e=>{
   const a=visibleAct();if(a&&a.app)jumpTo(a.app);
 });
 function jumpTo(app){if(!app)return;S.fg=app;S.expanded=false;renderDesktop();render()}
-island.addEventListener('wheel',e=>{if(!S.f.volume)return;e.preventDefault();S.vol=Math.max(0,Math.min(100,S.vol+(e.deltaY<0?4:-4)));if(S.expanded&&visibleAct()?.kind==='media')patch();else pop('volume',null,1600)},{passive:false});
+let hAcc=0,lastSwipe=0;
+island.addEventListener('wheel',e=>{
+  if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){e.preventDefault();if(!bubbleKind)return;hAcc+=e.deltaX;
+    if(Math.abs(hAcc)>=60&&Date.now()-lastSwipe>450){const dir=hAcc>0?1:-1;hAcc=0;lastSwipe=Date.now();const a=visibleAct();if(!a)return;
+      S.pref=bubbleKind;S.prefPair=[a.kind,bubbleKind].sort().join();S.expanded=false;render();
+      content.style.setProperty('--sx',dir*36+'px');content.classList.remove('slidein');void content.offsetWidth;content.classList.add('slidein')}return}
+},{passive:false});
+island.addEventListener('wheel',e=>{if(Math.abs(e.deltaX)>Math.abs(e.deltaY))return;if(!S.f.volume)return;e.preventDefault();S.vol=Math.max(0,Math.min(100,S.vol+(e.deltaY<0?4:-4)));if(S.expanded&&visibleAct()?.kind==='media')patch();else pop('volume',null,1600)},{passive:false});
 
 /* sliders in the player: seek and volume */
 let slide=null;
@@ -723,6 +750,7 @@ function act(a,el){
       if(!m.playing){stopAct('media');S.pausedHere=true}   // paused from the island: player stays open, then shrinks to a dot
       else{S.pausedHere=false;startAct('media',m.app)}break;
     case 'shuffle':S.shuffle=!S.shuffle;break;
+    case 'outputs':S.outOpen=!S.outOpen;break;
     case 'repeat':S.repeat=(S.repeat+1)%3;break;
     case 'mute':S.call.muted=!S.call.muted;break;
     case 'next':m.idx=(m.idx+1)%TRACKS.length;m.t=0;break;
@@ -731,6 +759,7 @@ function act(a,el){
     case 't5':S.timer.left+=300;S.timer.total+=300;break;
     case 'tend':stopAct('timer');S.expanded=false;break;
     case 'jump':{const a2=visibleAct();if(a2&&a2.app)jumpTo(a2.app);return}
+    case 'out:0':case 'out:1':case 'out:2':S.outSel=+a.slice(4);S.outOpen=false;break;
     case 'saver':pop('saver',null,2000);return;
     case 'answer':answer();return;
     case 'decline':stopAct('ring');pop('msg',{i:I.hang,c:'#FF453A',t:'Declined · '+S.ring.who,w:220},1800);return;
@@ -805,7 +834,8 @@ const OPTS=[
   ['replaceVol','Replace the Windows volume pop-up','Only the island shows when you press volume keys'],
   ['showClip','Show copied text','Off: just says "Copied". Passwords are never shown'],
   ['fullscreen','Hide in full-screen','Games and videos stay clean. Volume still shows'],
-  ['wake','Listen for “Jarvis”','Say “Jarvis, open Spotify” without pressing anything. Keeps the mic on; paused during calls'],
+  ['glow','Album colour glow','A soft glow round the island in the colour of the song\'s cover'],
+  ['wake','Listen for “Jarvis”','Say “Jarvis, open Spotify” without pressing anything. Keeps the mic on, also during calls'],
   ['jsounds','Jarvis sounds','A soft chime when it listens and when it\'s done'],
   ['startup','Start with Windows','']
 ];
@@ -881,11 +911,14 @@ function renderCC(){
   <div class="seg">${['left','center','right'].map(p=>`<button data-pos="${p}" aria-pressed="${S.pos===p}">${posMini(p)}${p[0].toUpperCase()+p.slice(1)}</button>`).join('')}</div>
 
   <h4>Options</h4>
-  <div class="opts">${OPTS.slice(0,3).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
-    ${OPTS.slice(3,5).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
+  <div class="opts">${OPTS.slice(0,4).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
+    ${OPTS.slice(4,6).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}
     <div class="opt"><span class="on-l"><b>Jarvis key</b><span>Hold it and talk. Ctrl + Space blocks VS Code's autocomplete; Right Alt is a good swap. Escape resets.</span></span><button class="kbd-btn" id="jkBtn">${esc(S.jarvis.key)}</button></div>
+    <div class="opt" style="flex-direction:column;align-items:stretch;gap:8px"><span class="on-l"><b>AI brain (Groq, free)</b><span>When Jarvis doesn’t understand, or you ask a question, it asks Groq. Only those phrases leave your laptop. Free key: console.groq.com/keys</span></span>
+      <div class="add-row" style="margin:0"><input type="text" id="gkIn" placeholder="${S.jarvis.brainKey?'Saved key gsk_…'+esc(S.jarvis.brainKey.slice(-4))+' · paste a new one to replace':'Paste your Groq key (gsk_…)'}" style="flex:1;min-width:0" autocomplete="off"><button class="go" id="gkSave">Save</button>${S.jarvis.brainKey?'<button class="pb" id="gkDel">Remove</button>':''}</div>
+      <div class="preview" id="gkMsg"></div></div>
     <div class="opt"><span class="on-l"><b>Discord mute shortcut</b><span>Same keys as in Discord. The island shows when you're muted. Backspace clears it.</span></span><button class="kbd-btn" id="kbdBtn">${S.discordKey||'Set'}</button></div>
-    ${OPTS.slice(5).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
+    ${OPTS.slice(6).map(([k,n,d])=>`<label class="opt"><span class="on-l"><b>${n}</b>${d?`<span>${d}</span>`:''}</span><input type="checkbox" class="sw" data-opt="${k}" ${S.opt[k]?'checked':''}></label>`).join('')}</div>
 
   <div class="cc-foot"><button class="pb" data-cc="pause">${S.paused?'Resume island':'Pause island'}</button><button class="pb" data-cc="logs">Log folder</button><button class="pb" data-cc="quit">Quit DyIsd</button></div>`;
   renderDeadlines();wireAdd();
@@ -985,7 +1018,7 @@ cc.addEventListener('click',e=>{
     case 'quit':toggleCC(false);pop('msg',{i:I.power,t:'In the real app, this closes DyIsd',w:320},2200);break;
   }
 });
-cc.addEventListener('change',e=>{const o=e.target.closest('[data-opt]');if(o){S.opt[o.dataset.opt]=o.checked;save()}});
+cc.addEventListener('change',e=>{const o=e.target.closest('[data-opt]');if(o){S.opt[o.dataset.opt]=o.checked;save();render()}});
 function toggleCC(open){
   ccOpen=open??!ccOpen;
   cc.classList.toggle('closed',!ccOpen);$('#trayBtn').setAttribute('aria-expanded',ccOpen);
@@ -1028,7 +1061,22 @@ let jT=null,waveT=null;
 function jListening(text){clearTimeout(jT);pop('jarvis',{text,listening:true},60000);clearInterval(waveT);
   waveT=setInterval(()=>stage.querySelectorAll('.js-jwave i').forEach(i=>i.style.height=(20+Math.random()*80)+'%'),90)}
 function jThinking(){clearInterval(waveT);pop('jarvis',{text:'Got it…',listening:false},60000)}
-function jReply(r,heard){clearInterval(waveT);
+/* the AI brain (Groq) — in this preview a few canned answers stand in for it */
+const BRAIN=[
+  [/less bright|too bright|dim/,{do:'brightness down',say:'Dimmed it'}],
+  [/sleepy|relax|calm|chill/,{do:'play lofi beats on youtube',say:'Playing something calm'}],
+  [/can't hear|louder|too quiet/,{do:'volume up',say:'Turned it up'}],
+  [/capital of france/,{say:'Paris is the capital of France.'}],
+  [/dollar in rupees|usd to inr/,{say:'About ₹88 for 1 US dollar, but rates change daily, so check a live source before paying.'}],
+  [/joke/,{say:'Why do programmers prefer dark mode? Because light attracts bugs.'}],
+  [/world cup.*2022|2022.*world cup/,{say:'Argentina won the 2022 FIFA World Cup, beating France on penalties.'}],
+];
+function brain(t,orig){const hit=BRAIN.find(([re])=>re.test(t));
+  if(!hit)return{i:I.spark,c:'#BF5AF2',answer:true,t:'(In the real app Groq answers this. The preview only knows a few examples.)'};
+  const b=hit[1];if(b.do){const r=jOne(b.do);return{...r,t:b.say||r.t}}
+  return{i:I.spark,c:'#BF5AF2',answer:true,t:b.say}}
+function jReply(r,heard){
+  if(r.answer){clearInterval(waveT);const lines=Math.min(4,Math.ceil(r.t.length/46));pop('answer',{t:r.t,s:heard?`“${heard}”`:''},Math.min(12000,Math.max(4500,3500+r.t.length*45)));chime.done();return}clearInterval(waveT);
   if(r.silent){chime.done();return}
   pop('jcard',{i:r.i||I.check,c:r.c||'#0A84FF',t:r.t,s:heard?`“${heard}”`:null,yes:r.yes,no:r.no,yesL:r.yesL,noL:r.noL},r.yes?10000:r.fail?5000:3600);
   (r.fail?chime.error:r.yes?chime.listen:chime.done)()}
@@ -1135,6 +1183,7 @@ function jOne(orig){
     if(SITES[name])return{i:I.globe,t:SITES[name]};
     if(/^[\w-]+\.(com|in|org|io|dev|ai)$/.test(name))return{i:I.globe,t:name};
     if(/^(open|launch|start)/.test(t))return{fail:1,i:I.x,c:'#FF9F0A',t:`No app called “${name}”`};}
+  if(S.jarvis.brainKey)return brain(t,orig);
   if(/^(what|who|how|why|when|where|which) /.test(t))return{i:I.globe,t:'Google · '+orig};
   return{fail:1,i:I.mic,c:'#FF9F0A',t:`Didn't catch a command in “${orig}”`};
 }
@@ -1169,6 +1218,10 @@ let ed=null;
 function normNum(t){let d=t.replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.length===11&&d[0]==='0')d=d.slice(1);if(d.length===10)d='91'+d;return d.length>=11&&d.length<=15?d:null}
 function savedContact(who){who=who.toLowerCase();return S.jarvis.contacts.find(c=>c.name.toLowerCase()===who||c.name.toLowerCase().split(' ').includes(who))}
 function wireModes(){
+  const gs=$('#gkSave');if(gs)gs.addEventListener('click',()=>{const k=$('#gkIn').value.trim();const msg=$('#gkMsg');
+    if(!k.startsWith('gsk_')||k.length<20){msg.style.color='#FF9F0A';msg.textContent='That doesn’t look like a Groq key. They start with gsk_';return}
+    msg.style.color='#30D158';msg.textContent='Checking the key…';setTimeout(()=>{S.jarvis.brainKey=k;renderCC();const m2=$('#gkMsg');m2.style.color='#30D158';m2.textContent='Works. Try “Jarvis, what’s 1 dollar in rupees?”'},700)});
+  const gd=$('#gkDel');if(gd)gd.addEventListener('click',()=>{S.jarvis.brainKey='';renderCC();$('#gkMsg').textContent='Key removed. Jarvis is rules-only again.'});
   const ca=$('#ctAdd');if(ca)ca.addEventListener('click',()=>{const n=$('#ctName').value.trim(),num=normNum($('#ctNum').value);
     const err=!n?'Type their name, the way you’ll say it':!num?'That number doesn’t look right. Use 10 digits, or the full number with country code':'';
     if(err){$('#ctErr').textContent=err;return}

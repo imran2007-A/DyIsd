@@ -271,6 +271,13 @@ public sealed class CommandRunner
 
             // ---------------- the PC ----------------
             case "radio": return await RadioAsync(c.Text, c.N);
+            case "output":
+                {
+                    var o = AudioOutputs.Find(c.Text);
+                    if (o == null) return Bad($"No \u201C{c.Text}\u201D connected");
+                    if (o.IsDefault) return Ok(o.Glyph, "Already playing on " + o.Name);
+                    return AudioOutputs.SetDefault(o.Id) ? Ok(o.Glyph, "Playing on " + o.Name) : Bad("Couldn't switch to " + o.Name);
+                }
             case "theme": return Theme(c.Text);
             case "power": return Power(c.Text);
             case "recycle":

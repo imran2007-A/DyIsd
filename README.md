@@ -7,7 +7,7 @@ doesn't show while you're in Chrome.
 
 | Feature | What it shows |
 |---|---|
-| Now playing | Song, artist, album art. Click to open the player: seek, shuffle, repeat, volume, open the app. Only while it's playing: pause from Spotify and it's gone; pause from the island and it shrinks to a tiny dot you can click to resume. |
+| Now playing | Song, artist, album art. The island glows softly in the cover's colour (switch it off in Options). Click to open the player: seek, shuffle, repeat, volume, **Play on…** (switch between speakers, headphones and earbuds, like AirPlay), open the app. Only while it's playing: pause from Spotify and it's gone; pause from the island and it shrinks to a tiny dot you can click to resume. |
 | Calls | WhatsApp, Discord, Teams, Zoom, Telegram: green pill with the call timer and your voice level. Click for who you're talking to, Mute and Go to call. Your Discord mute shortcut shows up on the island too. |
 | Incoming calls | WhatsApp / Discord / Teams / Telegram ringing: caller, a red Decline and a green Answer button, like iPhone. Best effort: DyIsd presses the app's own buttons (see "Honest limits"). |
 | Jarvis | Voice control. Hold **Ctrl + Space** and talk, or just say "Jarvis, …". Opens apps and sites, searches, types, presses shortcuts, scrolls, controls music, volume, brightness, Wi-Fi, Bluetooth, dark mode, timers and reminders, answers calls. No AI, nothing leaves your laptop. |
@@ -16,7 +16,7 @@ doesn't show while you're in Chrome.
 | File transfers | Bluetooth and Nearby Share sends and receives with progress. |
 | Volume | Replaces the Windows volume pop-up. |
 | Brightness | Pops up when laptop brightness changes. |
-| Battery | Charger plugged in or out, warnings at 15% and 5%. |
+| Battery | Plug in: a ring fills up to your battery level, like the iPhone. Unplugged, and warnings at 15% and 5%. |
 | Camera | Green dot while an app uses your camera, like the iPhone. |
 | Earbuds | A card when Bluetooth earbuds or headphones connect, with battery level when Windows knows it. |
 | Focus timer | Focus sessions of 15–60 min. **Ctrl + Alt + F** or the Control Center starts one. |
@@ -28,7 +28,7 @@ doesn't show while you're in Chrome.
 
 The most important activity fills the island: call → ringing call / Clock timer → music →
 stopwatch / focus timer → downloads / transfers. The next one sits in a small circle beside it;
-click the circle to swap them. Nothing shows while you're in the app it belongs to: YouTube in
+click the circle (or swipe sideways with two fingers on the touchpad) to swap them. Nothing shows while you're in the app it belongs to: YouTube in
 Chrome shows once you switch away from Chrome.
 
 | | |
@@ -38,6 +38,13 @@ Chrome shows once you switch away from Chrome.
 | Drag sideways | Move it to the left, center or right |
 | Drag up (flick) | Hide what's showing until it changes (next song, next call…) |
 | Scroll | Volume (Shift too for brightness) |
+| Two-finger swipe sideways | Switch to the activity in the circle |
+
+**More than one monitor:** the island follows you to whichever screen the app you're using is on.
+
+**Not colour-only:** states that colour shows are shown by shape too: a dot under Shuffle and
+Repeat when they're on, a tick next to the speaker that's playing, an arrow in the transfer
+ring so it isn't confused with the timer ring, the bolt and the % number while charging.
 
 **Control Center:** click the DyIsd icon in the taskbar corner. Turn features on and off, start
 a focus session, add deadlines, paste your calendar link, pick the position.
@@ -104,6 +111,22 @@ needed. "End Claude mode" closes the apps it opened and pauses the music (switch
 mode). Steps run in order; one that fails is skipped and the island says which. WhatsApp
 messages and calls inside a mode never send without your yes, so they're skipped in a mode.
 
+### AI brain (optional, free)
+
+Jarvis works without AI: it matches what you say against its rules. With a free
+[Groq](https://console.groq.com/keys) key pasted in Control Center → Options → **AI brain**, two
+things change:
+- **Loose phrasing works.** "It's too bright", "I can't hear anything", "put something relaxing on":
+  the brain rewrites it as normal Jarvis commands, which then run through the same rules (so
+  "Send to Rahul?" and "Shut down?" still ask first).
+- **Questions get answers** on the island instead of a Google search: "what's the capital of
+  France", "how many grams in a pound", "tell me a joke".
+
+Only phrases the rules don't understand, and questions, are sent to Groq, with the time, the
+app you're in, your app names, mode names and contact names (no numbers). Your key is
+encrypted with your Windows account. The free tier allows about 1,000 requests a day. Without a
+key nothing leaves your laptop.
+
 ## Honest limits
 
 - **WhatsApp, Discord, Claude, Apple Music play-by-name, ringing calls, Windows Clock and file
@@ -113,7 +136,12 @@ messages and calls inside a mode never send without your yes, so they're skipped
   saw (lines starting `whatsapp sees`, `discord sees`, `claude sees`, `apple music sees`, `ring sees`, `clock sees`, `transfer sees`; see "Where things are" for the folder). Send those if one doesn't show.
 - **Listen for "Jarvis"** keeps the microphone open, so Windows shows its mic icon. Every phrase
   it hears is turned into text on your laptop to check for the name; nothing is sent anywhere.
-  It pauses during calls. Turn it off and Ctrl + Space still works.
+  It keeps listening during calls. Turn it off and Ctrl + Space still works.
+- **Play on…** uses the same hidden Windows switch that the Sound settings page and apps like
+  EarTrumpet use (Windows has no official one); it moves music, system sounds and calls together.
+- **AI brain answers can be wrong**, like any AI. Facts that change (prices, rates, scores) may
+  be out of date. Commands it writes still go through the rules, so it can't do anything
+  Jarvis couldn't do by voice.
 - **Volume pop-up:** Windows 11's own pop-up can't be turned off, so the island only shows
   changes DyIsd made (keys, scroll, Jarvis); headphone buttons show only Windows' pop-up.
 

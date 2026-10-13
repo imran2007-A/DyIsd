@@ -20,6 +20,24 @@ public sealed class RingProgress : FrameworkElement
     public Brush? Track { get => (Brush?)GetValue(TrackProperty); set => SetValue(TrackProperty, value); }
     public Brush? Fill { get => (Brush?)GetValue(FillProperty); set => SetValue(FillProperty, value); }
 
+    /// <summary>Fill up from empty when it appears (the charging ring).</summary>
+    public bool Sweep { get => (bool)GetValue(SweepProperty); set => SetValue(SweepProperty, value); }
+    public static readonly DependencyProperty SweepProperty = Reg(nameof(Sweep), typeof(bool), false);
+
+    static readonly DependencyProperty ShownProperty = Reg("Shown", typeof(double), -1.0);
+
+    public RingProgress()
+    {
+        Loaded += (_, _) =>
+        {
+            if (!Sweep || !SystemParameters.ClientAreaAnimation) return;
+            BeginAnimation(ShownProperty, new System.Windows.Media.Animation.DoubleAnimation(0, Value, TimeSpan.FromMilliseconds(1100))
+            {
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+            });
+        };
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         double size = Math.Min(ActualWidth, ActualHeight);
@@ -29,7 +47,8 @@ public sealed class RingProgress : FrameworkElement
 
         if (Track != null) dc.DrawEllipse(null, new Pen(Track, t), c, r, r);
 
-        double v = Math.Clamp(Value, 0, 1);
+        double shown = (double)GetValue(ShownProperty);
+        double v = Math.Clamp(Sweep && shown >= 0 ? shown : Value, 0, 1);
         if (v <= 0 || Fill == null) return;
         var pen = new Pen(Fill, t) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         if (v >= 0.9999)

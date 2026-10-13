@@ -33,6 +33,9 @@ public sealed class MediaState : Observable
     public string Artist { get => _artist; set => Set(ref _artist, value); }
     public string Source { get => _source; set => Set(ref _source, value); }
     public Brush? ArtBrush { get => _art; set => Set(ref _art, value); }
+    Color? _artColor;
+    /// <summary>The album art's main colour (null for grey covers): the bars and the island's glow.</summary>
+    public Color? ArtColor { get => _artColor; set => Set(ref _artColor, value); }
     public bool IsPlaying { get => _playing; set { if (Set(ref _playing, value)) Raise(nameof(PlayGlyph)); } }
     public string PlayGlyph => _playing ? "\uE769" : "\uE768";
     public double Progress { get => _progress; set => Set(ref _progress, value); }
@@ -54,7 +57,7 @@ public sealed class MediaState : Observable
     public bool HasSession { get => _hasSession; set => Set(ref _hasSession, value); }
     public bool Shuffle { get => _shuffle; set { if (Set(ref _shuffle, value)) Raise(nameof(ShuffleBrush)); } }
     /// <summary>0 = off, 1 = repeat this song, 2 = repeat all.</summary>
-    public int Repeat { get => _repeat; set { if (Set(ref _repeat, value)) { Raise(nameof(RepeatBrush)); Raise(nameof(RepeatGlyph)); } } }
+    public int Repeat { get => _repeat; set { if (Set(ref _repeat, value)) { Raise(nameof(RepeatBrush)); Raise(nameof(RepeatGlyph)); Raise(nameof(RepeatOn)); } } }
     public bool CanShuffle { get => _canShuffle; set => Set(ref _canShuffle, value); }
     public bool CanRepeat { get => _canRepeat; set => Set(ref _canRepeat, value); }
     public bool CanSeek { get => _canSeek; set => Set(ref _canSeek, value); }
@@ -63,6 +66,7 @@ public sealed class MediaState : Observable
     static Brush MakeBrush(byte a) { var b = new SolidColorBrush(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)); b.Freeze(); return b; }
     public Brush ShuffleBrush => _shuffle ? Brushes.White : Off;
     public Brush RepeatBrush => _repeat != 0 ? Brushes.White : Off;
+    public bool RepeatOn => _repeat != 0;
     public string RepeatGlyph => _repeat == 1 ? "\uE8ED" : "\uE8EE";
 }
 
@@ -184,6 +188,8 @@ public sealed class InfoCard
     public string? Initial { get; init; }
     public Brush? AvatarBrush { get; init; }
     public string? AppName { get; init; }
+    /// <summary>0..1 for cards with a ring (charging).</summary>
+    public double Progress { get; init; }
 }
 
 /// <summary>Jarvis listening / working on what you said.</summary>

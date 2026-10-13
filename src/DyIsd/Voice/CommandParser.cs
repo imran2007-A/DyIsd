@@ -370,6 +370,9 @@ public static class CommandParser
         // ----- Claude -----
         Add(@"(?:ask|tell) claude.*|(?:new|start a new|start new|open a new|open new|start a) (?:claude )?(?:chat|session|conversation)(?: (?:in|on|with) claude)?.*",
             (_, o) => AskClaude(o));
+        // "play on headphones", "switch audio to speakers", "use my earbuds" (where the sound goes)
+        Add(@"(?:play|switch|move|send|change) (?:the )?(?:sound|audio|music|output)? ?(?:on|to|through|via) (?:my |the )?(headphones?|headsets?|earbuds?|earphones?|buds|airpods|speakers?|laptop speakers?|.+? (?:speakers?|headphones?|earbuds?|buds))|(?:use|switch to) (?:my |the )?(headphones?|headsets?|earbuds?|earphones?|buds|airpods|speakers?|laptop speakers?)(?: for (?:sound|audio))?|(?:audio|sound) output (?:to )?(.+)",
+            (m, _) => new Cmd("output", First(m)));
         // "play my chill vibes playlist", "play playlist gym on apple music"
         Add(@"(?:play|start|put on|shuffle) (?:my |the |our )?(?:playlist (?:called |named )?(.+?)|(.+?) playlist)(?: (?:on|in|from) (?:apple music|music|itunes))?",
             (m, _) => new Cmd("applemusic-playlist", First(m)));

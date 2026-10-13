@@ -46,6 +46,13 @@ at the file where it happens.
 - [ ] UI Automation: reading and pressing buttons in other apps (ringing calls, Clock, transfers)
       → `Services/Uia.cs`, `Services/RingService.cs`, `Services/ClockService.cs`, `Services/TransferService.cs`
 - [ ] Which apps are making sound (Core Audio sessions) → `Services/AudioSessions.cs`
+- [ ] Multiple monitors and DPI (why 100% vs 125% scaling changes pixel maths) → `Native/Monitors.cs`
+- [ ] COM interfaces (how C# talks to Windows' hidden "default speaker" switch) → `Services/AudioOutputs.cs`
+- [ ] Reading pixels: finding an album cover's main colour → `MediaService.Vibrant()`
+- [ ] Raw window messages (sideways touchpad swipes) → `IslandWindow.WndProc()`
+- [ ] Debouncing: why the call pill waits 4 s before ending, and why held keys are counted once
+      → `CallService.Check()`, `VolumeKeyHook.Callback()`
+- [ ] Accessibility: never show something by colour alone → `IslandWindow.xaml` (search "colour")
 - [ ] Animations: transform groups, keyframes, the liquid morph and flick
       → `IslandWindow.xaml.cs` → `Wobble()`, `Flick()`, `Squish()`, `SetBubble()`
 
@@ -66,8 +73,11 @@ at the file where it happens.
 - [ ] Reading a web page without a browser (the top YouTube video) → `CommandRunner.YouTubePlayAsync()`
 - [ ] Modes: data (a list of steps) turned into commands → `Voice/Modes.cs`, run by
       `CommandRunner.RunModeAsync()`; the builder UI → `ControlCenter.xaml.cs` (search "modes")
-- [ ] Later, adding AI: "select, don't generate" (the AI picks one of these commands, it never
-      runs anything it made up) → ask Claude when you get here
+- [ ] The AI brain: calling a web API (HTTP POST + JSON), API keys, rate limits, and
+      "select, don't generate" (the AI only writes commands the rules already know) → `Voice/Brain.cs`,
+      used in `JarvisService.AskBrainAsync()`
+- [ ] Keeping a secret on disk safely (DPAPI: encrypted to your Windows login) → `Brain.SaveKey()`
+- [ ] Deep links (`whatsapp://`, `steam://`, `ms-settings:`): how apps let others open them at the right screen → `Voice/WhatsApp.cs`
 
 ## Packaging
 - [ ] What MSIX is, what a certificate is, and why Install.bat trusts one → `packaging/`

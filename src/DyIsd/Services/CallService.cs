@@ -44,6 +44,12 @@ public sealed class CallService
         _privacy.Changed += Check;
         _mic.MuteChanged += muted => { if (App != null && App.Name != "Discord") State.Muted = muted; };
         _clock.Tick += (_, _) => Tick();
+        _endGrace.Tick += (_, _) =>
+        {
+            _endGrace.Stop();
+            bool stillFree = !_privacy.MicApps.Any(m => Apps.Any(a => a.KeyHints.Any(h => m.Key.Contains(h))));
+            if (stillFree && App != null) End();
+        };
         // In a Discord call, read Discord's own Mute button so the island always matches it.
         _discordSync.Tick += async (_, _) =>
         {
@@ -65,10 +71,20 @@ public sealed class CallService
             .Select(m => Apps.FirstOrDefault(a => a.KeyHints.Any(h => m.Key.Contains(h))))
             .FirstOrDefault(a => a != null);
 
-        if (match == App) return;
-        if (match == null) End();
-        else Begin(match);
+        if (match == App) { _endGrace.Stop(); return; }
+        if (match == null)
+        {
+            // Apps let go of the mic for a moment (switching devices, Discord reconnecting):
+            // only call it over if it stays free for a few seconds. Stops the pill flickering.
+            if (!_endGrace.IsEnabled) _endGrace.Start();
+            return;
+        }
+        _endGrace.Stop();
+        if (App != null) End();
+        Begin(match);
     }
+
+    readonly DispatcherTimer _endGrace = new() { Interval = TimeSpan.FromSeconds(4) };
 
     void Begin(CallApp app)
     {
@@ -132,7 +148,14 @@ public sealed class CallService
     /// <summary>You pressed your Discord mute shortcut yourself.</summary>
     public void DiscordShortcutPressed()
     {
-        if (App?.Name == "Discord") State.Muted = !State.Muted;
+        if (App?.Name != "Discord") return;
+        State.Muted = !State.Muted; // show it straight away…
+        // …then ask Discord, in case the shortcut didn't reach it (or did something else).
+        _ = System.Threading.Tasks.Task.Delay(600).ContinueWith(async _ =>
+        {
+            var muted = await System.Threading.Tasks.Task.Run(DiscordControl.IsMuted);
+            if (muted != null) System.Windows.Application.Current.Dispatcher.Invoke(() => { if (App?.Name == "Discord") State.Muted = muted.Value; });
+        });
     }
 
     /// <summary>Best guess at who you're talking to, from the app's window titles.</summary>

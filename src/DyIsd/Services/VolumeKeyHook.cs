@@ -41,6 +41,8 @@ public sealed class VolumeKeyHook : IDisposable
         _hook = IntPtr.Zero;
     }
 
+    readonly System.Collections.Generic.Dictionary<int, DateTime> _held = new();
+
     IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)
@@ -57,7 +59,16 @@ public sealed class VolumeKeyHook : IDisposable
             else if (!injected)
             {
                 if (Intercept != null && Intercept(vk, down)) return (IntPtr)1;
-                if (down) KeyDown?.Invoke(vk);
+                // Holding a key makes Windows repeat it (every ~30 ms); one press = one KeyDown.
+                // A key-up we never saw (locked the PC mid-press) expires after a second.
+                if (!down) _held.Remove(vk);
+                else
+                {
+                    var now = DateTime.UtcNow;
+                    bool repeat = _held.TryGetValue(vk, out var last) && now - last < TimeSpan.FromSeconds(1);
+                    _held[vk] = now;
+                    if (!repeat) KeyDown?.Invoke(vk);
+                }
             }
         }
         return Win32.CallNextHookEx(_hook, nCode, wParam, lParam);

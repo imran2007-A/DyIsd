@@ -12,6 +12,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DyIsd.Controls;
+using DyIsd.Native;
 using DyIsd.Services;
 using DyIsd.Settings;
 using DyIsd.Voice;
@@ -95,18 +96,21 @@ public partial class ControlCenter : Window
     void OnTimerChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => RefreshFocus();
 
     /// <summary>Opens under the island, on the same side, with a spring.</summary>
-    public void Open(Rect islandArea, string pos)
+    public void Open(IntPtr island, string pos)
     {
-        Top = islandArea.Top + 44;
-        Left = pos switch
-        {
-            "left" => islandArea.Left,
-            "right" => islandArea.Right - Width,
-            _ => islandArea.Left + (islandArea.Width - Width) / 2,
-        };
+        // Real pixels, so it opens under the island on whichever monitor the island is on.
+        Monitors.GetWindowRect(island, out var r);
+        var mon = Monitors.Of(island);
+        var work = Monitors.Work(mon);
+        double scale = Monitors.Scale(mon);
+        int width = (int)Math.Round(Width * scale);
+        int x = pos switch { "left" => r.Left, "right" => r.Right - width, _ => r.Left + (r.Width - width) / 2 };
+        int y = r.Top + (int)Math.Round(44 * scale);
         Panel.RenderTransformOrigin = new Point(pos == "left" ? 0.05 : pos == "right" ? 0.95 : 0.5, 0);
         // Fit small laptop screens: scroll inside the panel instead of running off the bottom.
-        Scroller.MaxHeight = Math.Min(640, SystemParameters.WorkArea.Bottom - Top - 40);
+        Scroller.MaxHeight = Math.Min(640, (work.Bottom - y) / scale - 40);
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        Monitors.Place(this, hwnd, x, y);
         Show();
         Activate();
         _refresh.Start();
@@ -925,14 +929,17 @@ public partial class ControlCenter : Window
             () => S.ClipboardShowText, v => S.ClipboardShowText = v);
         AddOption("Hide in full-screen", "Games and videos stay clean. Volume still shows.",
             () => S.HideInFullscreen, v => S.HideInFullscreen = v);
+        AddOption("Album colour glow", "A soft glow round the island in the colour of the song's cover.",
+            () => S.AlbumGlow, v => S.AlbumGlow = v);
 
         AddShortcutOption();
 
-        AddOption("Listen for \u201CJarvis\u201D", "Say \u201CJarvis, open Spotify\u201D without pressing anything. Keeps the microphone on; paused during calls.",
+        AddOption("Listen for \u201CJarvis\u201D", "Say \u201CJarvis, open Spotify\u201D without pressing anything. Keeps the microphone on, also during calls.",
             () => S.JarvisWakeWord, v => S.JarvisWakeWord = v);
         AddOption("Jarvis sounds", "A soft chime when it listens and when it's done.",
             () => S.JarvisSounds, v => S.JarvisSounds = v);
         AddJarvisKeyOption();
+        AddBrainOption();
 
         var startup = AddOption("Start with Windows", null, () => false, _ => { });
         startup.IsEnabled = false;
@@ -1076,6 +1083,62 @@ public partial class ControlCenter : Window
     }
 
     static string ShortcutText() => S.DiscordMuteKey == 0 ? "Set" : KeyText(S.DiscordMuteKey, S.DiscordMuteModifiers);
+
+    /// <summary>
+    /// The optional AI brain: paste a free Groq key. Jarvis only asks it when its own rules
+    /// don't understand you, and to answer questions.
+    /// </summary>
+    void AddBrainOption()
+    {
+        var sw = AddOption("AI brain (Groq, free)",
+            "When Jarvis doesn\u2019t understand, or you ask a question, it asks Groq. Only those phrases leave your laptop. Free key: console.groq.com/keys",
+            () => S.BrainEnabled, v => S.BrainEnabled = v);
+
+        var box = new TextBox { Style = (Style)FindResource("Field"), Tag = Brain.Masked() is { Length: > 0 } m ? $"Saved key {m} \u00B7 paste a new one to replace" : "Paste your Groq key (gsk_\u2026)" };
+        var save = new Button { Style = (Style)FindResource("BlueBtn"), Content = "Save", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var remove = new Button { Style = (Style)FindResource("Btn"), Content = "Remove", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Brain.Key().Length > 0 ? Visibility.Visible : Visibility.Collapsed };
+        var status = new TextBlock { Style = (Style)FindResource("Sub"), Margin = new Thickness(2, 6, 0, 0), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        void Status(string text, bool bad)
+        {
+            status.Text = text;
+            status.Foreground = bad ? ThemeService.Brush("Orange") : ThemeService.Brush("Good");
+            status.Visibility = Visibility.Visible;
+        }
+        save.Click += async (_, _) =>
+        {
+            var key = box.Text.Trim();
+            if (!key.StartsWith("gsk_") || key.Length < 20) { Status("That doesn\u2019t look like a Groq key. They start with gsk_", true); return; }
+            Brain.SaveKey(key);
+            box.Text = "";
+            save.IsEnabled = false;
+            Status("Checking the key\u2026", false);
+            var err = await Brain.TestAsync();
+            save.IsEnabled = true;
+            box.Tag = $"Saved key {Brain.Masked()} \u00B7 paste a new one to replace";
+            remove.Visibility = Visibility.Visible;
+            if (err == null) { Status("Works. Try \u201CJarvis, what\u2019s 1 dollar in rupees?\u201D", false); sw.IsChecked = S.BrainEnabled = true; SettingsStore.Save(); }
+            else Status(err, true);
+        };
+        remove.Click += (_, _) =>
+        {
+            Brain.SaveKey("");
+            box.Tag = "Paste your Groq key (gsk_\u2026)";
+            remove.Visibility = Visibility.Collapsed;
+            Status("Key removed. Jarvis is rules-only again.", false);
+        };
+
+        var line = new DockPanel();
+        DockPanel.SetDock(remove, Dock.Right);
+        DockPanel.SetDock(save, Dock.Right);
+        line.Children.Add(remove);
+        line.Children.Add(save);
+        line.Children.Add(box);
+        var panel = new StackPanel { Margin = new Thickness(14, 0, 14, 12) };
+        panel.Children.Add(line);
+        panel.Children.Add(status);
+        Options.Children.Add(panel);
+    }
 
     ToggleButton AddOption(string title, string? help, Func<bool> get, Action<bool> set)
     {

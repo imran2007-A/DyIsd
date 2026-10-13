@@ -113,6 +113,19 @@ public sealed class IslandController
         _win.ActionClicked += tag =>
         {
             if (tag == "jump") { Jump(); return; }
+            if (tag == "outputs")
+            {
+                _outputs = _outputs == null ? Services.AudioOutputs.List() : null;
+                Render();
+                return;
+            }
+            if (tag.StartsWith("output:"))
+            {
+                Services.AudioOutputs.SetDefault(tag[7..]);
+                _outputs = null;
+                Render();
+                return;
+            }
             if (tag.StartsWith("jump:")) { EndPopup(); JumpRequested?.Invoke(tag[5..].Split(',')); return; }
             if (tag is "dismiss" or "open-file" or "show-file" or "batt-settings") EndPopup();
             if (tag == "toggle" && _media.IsPlaying) _pausedHere = true; // pausing from the island
@@ -124,6 +137,12 @@ public sealed class IslandController
         _win.Dropped += zone => PositionDropped?.Invoke(zone);
         _win.FlickedUp += OnFlick;
         _win.BubbleClicked += OnBubbleClick;
+        _win.Swiped += dir =>
+        {
+            if (_bubbleKind == null || _popup != null) return;
+            OnBubbleClick();
+            _win.SlideIn(dir);
+        };
     }
 
     public bool Paused
@@ -198,6 +217,8 @@ public sealed class IslandController
         _ => "",
     };
 
+    List<Services.AudioOutput>? _outputs; // the "Play on…" list, while it's open
+
     public void Render()
     {
         if (_paused)
@@ -213,6 +234,7 @@ public sealed class IslandController
         var kind = activities.FirstOrDefault();
         var second = activities.Skip(1).FirstOrDefault();
         if (kind != _shownKind) _expanded = false;
+        if (!_expanded || kind != "media") _outputs = null;
         _shownKind = kind;
 
         double? width = null;
@@ -249,7 +271,8 @@ public sealed class IslandController
 
     (string, object, double, double) Spec(string kind, bool expanded) => kind switch
     {
-        "media" => expanded ? ("media-e", _media, 366, 208)
+        "media" => expanded && _outputs != null ? ("media-out", _outputs, 366, Math.Max(208, 58 + 36 * _outputs.Count))
+                 : expanded ? ("media-e", _media, 366, 208)
                  : _pausedHere && !_media.IsPlaying ? ("media-dot", _media, 14, 14)
                  : ("media-c", _media, 190, 34),
         "call" => expanded ? ("call-e", _call, 360, 84) : ("call-c", _call, 190, 34),
@@ -398,10 +421,12 @@ public sealed class IslandController
         switch (ev)
         {
             case BatteryEvent.Charging:
-                ShowPopup("pill", "battery", new InfoCard
+                // Like the iPhone: a ring fills up to your battery level. Yellow below 20%.
+                ShowPopup("charging", "battery", new InfoCard
                 {
-                    Glyph = "\uE945", GlyphBrush = B("Good"), Title = "Charging", Right = pct + "%", RightBrush = B("Good"),
-                }, 210, 40, 2800);
+                    Glyph = "\uE945", GlyphBrush = B("Good"), Title = "Charging",
+                    Right = pct.ToString(), RightBrush = pct < 20 ? B("Yellow") : B("Good"), Progress = pct / 100.0,
+                }, 220, 40, 3200);
                 break;
             case BatteryEvent.Unplugged:
                 ShowPopup("pill", "battery", new InfoCard
@@ -508,6 +533,16 @@ public sealed class IslandController
     }
 
     /// <summary>A Jarvis answer, question or download card. width 0 = fit the text.</summary>
+    /// <summary>A short answer from the AI brain: wraps onto up to four lines.</summary>
+    public void ShowJarvisAnswer(string answer, string heard)
+    {
+        int lines = Math.Clamp((int)Math.Ceiling(answer.Length / 46.0), 1, 4);
+        ShowPopup("answer", "jv:answer", new InfoCard
+        {
+            Glyph = "\uE945", GlyphBrush = B("Purple"), Title = answer, Subtitle = $"\u201C{heard}\u201D",
+        }, 392, 40 + lines * 19 + 18, Math.Clamp(3500 + answer.Length * 45, 4500, 12000), fullscreenOk: true);
+    }
+
     public void ShowJarvisCard(string glyph, string brushKey, string title, string? sub, string? right, string? button1, string? button2, double width, int ms)
     {
         static string? TagFor(string? label) => label switch

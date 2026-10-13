@@ -86,6 +86,8 @@ public sealed class AppSettings
     public FeatureFlags Features { get; set; } = new();
     public bool HideWindowsVolumePopup { get; set; } = true;
     public bool HideInFullscreen { get; set; } = true;
+    /// <summary>A soft glow round the island in the album art's colour.</summary>
+    public bool AlbumGlow { get; set; } = true;
     public bool ClipboardShowText { get; set; } = true;
     public int FocusMinutes { get; set; } = 25;
     public string CalendarUrl { get; set; } = "";
@@ -110,6 +112,12 @@ public sealed class AppSettings
     public List<JarvisPhrase> JarvisPhrases { get; set; } = new();
     /// <summary>Your modes ("Claude mode": open Claude, play my playlist…).</summary>
     public List<JarvisMode> JarvisModes { get; set; } = new();
+    /// <summary>The optional AI brain: used only when the rules don't understand you.</summary>
+    public bool BrainEnabled { get; set; } = true;
+    /// <summary>Your Groq key, encrypted to your Windows account (DPAPI). Empty = no brain.</summary>
+    public string GroqKey { get; set; } = "";
+    /// <summary>Blank = Brain.DefaultModel.</summary>
+    public string GroqModel { get; set; } = "";
     /// <summary>People Jarvis can message or call on WhatsApp, by name.</summary>
     public List<WhatsAppContact> WhatsAppContacts { get; set; } = new();
 }

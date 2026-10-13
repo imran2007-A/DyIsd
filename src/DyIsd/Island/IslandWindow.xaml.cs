@@ -38,6 +38,8 @@ public partial class IslandWindow : Window
     public event Action? FlickedUp;
     /// <summary>The small circle beside the island (second activity) was clicked.</summary>
     public event Action? BubbleClicked;
+    /// <summary>Two-finger swipe sideways on the touchpad (or tilt-wheel): switch to the other activity.</summary>
+    public event Action<int>? Swiped;
 
     const double WinWidth = 420, WinHeight = 250, Gap = 14;
     public const double BubbleSize = 34, BubbleGap = 6;
@@ -53,7 +55,12 @@ public partial class IslandWindow : Window
         InitializeComponent();
         Width = WinWidth;
         Height = WinHeight;
-        SourceInitialized += (_, _) => SetExStyle(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, true);
+        SourceInitialized += (_, _) =>
+        {
+            SetExStyle(Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE, true);
+            Place();
+            HwndSource.FromHwnd(Handle)?.AddHook(WndProc);
+        };
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => ApplyPosition(SettingsStore.Current.Position));
         ApplyPosition(SettingsStore.Current.Position);
     }
@@ -79,17 +86,46 @@ public partial class IslandWindow : Window
 
     // ---------- position ----------
 
+    IntPtr _monitor; // the screen the island is on (zero = the main one)
+
+    /// <summary>Moves the island to the monitor you're working on.</summary>
+    public void FollowMonitor(IntPtr monitor)
+    {
+        if (monitor == _monitor || !Monitors.IsValid(monitor)) return;
+        _monitor = monitor;
+        Place();
+    }
+
+    public IntPtr Handle => new WindowInteropHelper(this).Handle;
+
+    /// <summary>Puts the window at the top of its monitor, in real pixels (WPF only knows the main screen).</summary>
+    void Place()
+    {
+        var h = Handle;
+        if (h == IntPtr.Zero)
+        {
+            var wa = SystemParameters.WorkArea;
+            Top = wa.Top;
+            Left = _pos switch { "left" => wa.Left, "right" => wa.Right - WinWidth, _ => wa.Left + (wa.Width - WinWidth) / 2 };
+            return;
+        }
+        var mon = Monitors.IsValid(_monitor) ? _monitor : Monitors.Primary;
+        var w = Monitors.Work(mon);
+        int width = (int)Math.Round(WinWidth * Monitors.Scale(mon));
+        int x = _pos switch { "left" => w.Left, "right" => w.Right - width, _ => w.Left + (w.Width - width) / 2 };
+        Monitors.Place(this, h, x, w.Top);
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        Dispatcher.BeginInvoke(Place); // the new size is known only after the change
+    }
+
     public void ApplyPosition(string pos)
     {
         _pos = pos;
-        var wa = SystemParameters.WorkArea;
-        Top = wa.Top;
-        Left = pos switch
-        {
-            "left" => wa.Left,
-            "right" => wa.Right - WinWidth,
-            _ => wa.Left + (wa.Width - WinWidth) / 2,
-        };
+        Place();
         var align = pos switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
         Pill.HorizontalAlignment = align;
         Bubble.HorizontalAlignment = align;
@@ -100,8 +136,6 @@ public partial class IslandWindow : Window
         Resources["CompactFlow"] = pos == "right" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
     }
 
-    /// <summary>Where the Control Center should appear: under the island, same side.</summary>
-    public Rect IslandArea => new(Left, Top, WinWidth, WinHeight);
 
     // ---------- animation ----------
 
@@ -123,6 +157,38 @@ public partial class IslandWindow : Window
         Animate(Presenter, OpacityProperty, 1, 260, _smooth);
     }
 
+    // ---------- album-colour glow ----------
+
+    readonly DropShadowEffect _glow = new() { ShadowDepth = 0, BlurRadius = 22, Opacity = 0 };
+    MediaState? _glowSource;
+
+    /// <summary>A soft halo in the album's colour while music fills the island.</summary>
+    void UpdateGlow()
+    {
+        var m = Presenter.Content as MediaState;
+        if (m != _glowSource)
+        {
+            if (_glowSource != null) _glowSource.PropertyChanged -= OnGlowSource;
+            _glowSource = m;
+            if (m != null) m.PropertyChanged += OnGlowSource;
+        }
+        bool on = m is { IsPlaying: true, ArtColor: not null } && SettingsStore.Current.AlbumGlow;
+        if (on)
+        {
+            Pill.Effect ??= _glow;
+            var to = m!.ArtColor!.Value;
+            if (SystemParameters.ClientAreaAnimation)
+                _glow.BeginAnimation(DropShadowEffect.ColorProperty, new ColorAnimation(to, TimeSpan.FromMilliseconds(600)));
+            else _glow.Color = to;
+        }
+        Animate(_glow, DropShadowEffect.OpacityProperty, on ? 0.6 : 0, 400, _smooth);
+    }
+
+    void OnGlowSource(object? s, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MediaState.IsPlaying) or nameof(MediaState.ArtColor)) Dispatcher.BeginInvoke(UpdateGlow);
+    }
+
     public void ShowView(string templateKey, string logicalKind, object data, double width, double height)
     {
         if (templateKey != _templateKey || logicalKind != _logicalKind)
@@ -139,6 +205,7 @@ public partial class IslandWindow : Window
         {
             Presenter.Content = data;
         }
+        UpdateGlow();
 
         // Lay content out at its final size; the pill clips it while growing.
         Presenter.Width = width - 2;
@@ -298,6 +365,39 @@ public partial class IslandWindow : Window
         if (sender is FrameworkElement { Tag: string tag }) ActionClicked?.Invoke(tag);
     }
 
+    // ---------- sideways swipe ----------
+
+    const int WM_MOUSEHWHEEL = 0x020E;
+    int _hAccum;
+    DateTime _lastSwipe;
+    readonly TranslateTransform _slide = new();
+
+    /// <summary>WPF has no event for sideways scrolling, so it's read from the raw window message.</summary>
+    IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WM_MOUSEHWHEEL || !Pill.IsMouseOver) return IntPtr.Zero;
+        _hAccum += (short)((long)wParam >> 16);
+        handled = true;
+        // One swipe = one switch, however many messages the touchpad sends.
+        if (Math.Abs(_hAccum) >= 120 && DateTime.Now - _lastSwipe > TimeSpan.FromMilliseconds(450))
+        {
+            int dir = _hAccum > 0 ? 1 : -1;
+            _hAccum = 0;
+            _lastSwipe = DateTime.Now;
+            Swiped?.Invoke(dir);
+        }
+        else if (DateTime.Now - _lastSwipe <= TimeSpan.FromMilliseconds(450)) _hAccum = 0;
+        return IntPtr.Zero;
+    }
+
+    /// <summary>The new activity slides in from the side you swiped toward.</summary>
+    public void SlideIn(int dir)
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+        Presenter.RenderTransform = _slide;
+        _slide.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(dir * 36, 0, TimeSpan.FromMilliseconds(420)) { EasingFunction = _spring });
+    }
+
     void Pill_MouseWheel(object sender, MouseWheelEventArgs e) =>
         Wheel?.Invoke(e.Delta > 0 ? 1 : -1, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
 
@@ -415,11 +515,9 @@ public partial class IslandWindow : Window
             return;
         }
 
-        // Snap to whichever third of the screen the island was dropped in.
-        var mid = Pill.TranslatePoint(new Point(Pill.ActualWidth / 2, 0), this);
-        double cx = Left + mid.X;
-        var wa = SystemParameters.WorkArea;
-        string zone = cx < wa.Left + wa.Width / 3 ? "left" : cx > wa.Left + wa.Width * 2 / 3 ? "right" : "center";
+        // Snap to whichever third of the screen the island was dropped in (on the screen it was dropped on).
+        string zone = Monitors.ZoneAtCursor();
+        _monitor = Monitors.AtCursor();
         ApplyPosition(zone);
         Dropped?.Invoke(zone);
     }

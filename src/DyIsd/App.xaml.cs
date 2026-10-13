@@ -95,6 +95,7 @@ public partial class App : Application
         Jarvis = new JarvisService(this, Island);
         Wire();
 
+        Foreground.MonitorChanged += () => _window.FollowMonitor(Foreground.Monitor);
         Foreground.Start();
         Volume.Start();
         Media.State.Volume = Volume.Muted ? 0 : Volume.Level;
@@ -166,6 +167,9 @@ public partial class App : Application
         {
             if (S.DiscordMuteKey == 0 || vk != S.DiscordMuteKey) return;
             int mods = Win32.CurrentModifiers();
+            // Right Ctrl alone as the shortcut: Ctrl being "held" is the key itself.
+            foreach (int flag in new[] { Win32.MOD_KEY_CTRL, Win32.MOD_KEY_ALT, Win32.MOD_KEY_SHIFT, Win32.MOD_KEY_WIN })
+                if (IsModifierOf(vk, flag)) mods &= ~flag;
             if (mods == S.DiscordMuteModifiers) Dispatcher.BeginInvoke(Calls.DiscordShortcutPressed);
         };
 
@@ -390,7 +394,7 @@ public partial class App : Application
         if (_cc != null) { _cc.Activate(); return; }
         _cc = new ControlCenter(this);
         _cc.Closed += (_, _) => { _lastCcClose = DateTime.Now; _cc = null; };
-        _cc.Open(_window!.IslandArea, S.Position);
+        _cc.Open(_window!.Handle, S.Position);
     }
 
     void OnSettingsChanged()

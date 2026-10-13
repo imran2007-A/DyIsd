@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -282,7 +284,93 @@ public sealed class JarvisService : IDisposable
             }
         }
 
+        // The rules didn't get it (or it's a question): ask the brain, if you've set one up.
+        if (Brain.Enabled && NeedsBrain(text, cmds))
+        {
+            await AskBrainAsync(text);
+            return;
+        }
+
         var reply = await _runner.RunAsync(cmds);
+        // "Open" something that isn't an app: maybe the brain knows what you meant.
+        if (reply.Failed && Brain.Enabled && cmds.All(c => c.Kind is "bare" or "open" or "unknown"))
+        {
+            await AskBrainAsync(text);
+            return;
+        }
+        await HandleReplyAsync(text, reply);
+    }
+
+    static readonly Regex Question = new(@"^(what|what's|whats|who|who's|whom|whose|when|where|why|how|which|is|are|was|were|can|could|does|do|did|should|will|would|tell me|explain|define|meaning of|translate)\b", RegexOptions.IgnoreCase);
+
+    static bool NeedsBrain(string text, List<Cmd> cmds)
+    {
+        if (cmds.Any(c => c.Kind == "unknown")) return true;
+        // A question the rules would only turn into a Google search: answer it instead.
+        return cmds.Count == 1 && cmds[0].Kind == "url" && cmds[0].Text.Contains("google.com/search")
+            && Question.IsMatch(text.Trim()) && !Regex.IsMatch(text, @"^(search|google|look up|find)\b", RegexOptions.IgnoreCase);
+    }
+
+    string BrainContext()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Now: " + DateTime.Now.ToString("dddd d MMMM yyyy, h:mm tt"));
+        sb.AppendLine("App in front: " + (_app.Foreground.Current.Length > 0 ? _app.Foreground.Current : "none"));
+        if (_app.Media.State.IsActive) sb.AppendLine($"Playing: {_app.Media.State.Title} · {_app.Media.State.Artist} ({_app.Media.State.Source})");
+        sb.AppendLine("Installed apps: " + string.Join(", ", AppCatalog.SpokenNames(60)));
+        if (S.JarvisModes.Count > 0) sb.AppendLine("Modes: " + string.Join(", ", S.JarvisModes.Select(m => m.Name)));
+        if (S.WhatsAppContacts.Count > 0) sb.AppendLine("WhatsApp contacts: " + string.Join(", ", S.WhatsAppContacts.Select(c => c.Name)));
+        return sb.ToString();
+    }
+
+    async Task AskBrainAsync(string text)
+    {
+        Brain.Answer? a;
+        try { a = await Brain.AskAsync(text, BrainContext()); }
+        catch (Brain.BrainException ex)
+        {
+            ShowReply(text, new Reply("\uE783", "Orange", ex.Message, Failed: true));
+            return;
+        }
+        if (a == null) return;
+
+        if (a.Do.Count == 0)
+        {
+            if (a.Say.Length == 0) { ShowReply(text, new Reply("\uE897", "Orange", "Didn't get that", Failed: true)); return; }
+            _island.ShowJarvisAnswer(a.Say, text);
+            Chime.Done();
+            return;
+        }
+
+        // Run what the brain wrote through the normal rules, one by one, like you'd said it.
+        Reply? last = null;
+        foreach (var line in a.Do)
+        {
+            if (Modes.Match(line, S.JarvisModes) is var (mode, end))
+            {
+                last = end ? await _runner.EndModeAsync(mode) : await RunModeAsync(mode);
+                continue;
+            }
+            var parsed = CommandParser.Parse(line, DateTime.Now);
+            if (parsed.Any(c => c.Kind == "unknown"))
+            {
+                Log.Write("brain wrote something the rules don't know: " + line);
+                continue;
+            }
+            last = await _runner.RunAsync(parsed);
+            if (last.Confirm != null) break; // "are you sure?" waits for you
+        }
+        if (last == null)
+        {
+            ShowReply(text, new Reply("\uE897", "Orange", a.Say.Length > 0 ? a.Say : "Didn't get that", Failed: true));
+            return;
+        }
+        if (last.Confirm == null && !last.Failed && a.Say.Length > 0 && !last.Silent) last = last with { Text = a.Say };
+        await HandleReplyAsync(text, last);
+    }
+
+    Task HandleReplyAsync(string text, Reply reply)
+    {
         if (reply.Confirm != null)
         {
             _pending = reply;
@@ -293,9 +381,10 @@ public sealed class JarvisService : IDisposable
             _armTimer.Stop();
             _armTimer.Interval = TimeSpan.FromSeconds(10);
             _armTimer.Start();
-            return;
+            return Task.CompletedTask;
         }
         ShowReply(text, reply);
+        return Task.CompletedTask;
     }
 
     /// <summary>Runs a mode, showing each step on the island as it goes.</summary>

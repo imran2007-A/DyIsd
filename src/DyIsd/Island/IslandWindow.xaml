@@ -126,21 +126,67 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource IconBtn}" Content="&#xE8B1;" FontSize="14" Foreground="{Binding ShuffleBrush}" Tag="shuffle" Click="OnAction" IsEnabled="{Binding CanShuffle}" ToolTip="Shuffle"/>
+                    <!-- on/off isn't just brighter: a dot shows under the one that's on, like iOS -->
+                    <Grid>
+                        <Button Style="{StaticResource IconBtn}" Content="&#xE8B1;" FontSize="14" Foreground="{Binding ShuffleBrush}" Tag="shuffle" Click="OnAction" IsEnabled="{Binding CanShuffle}" ToolTip="Shuffle"/>
+                        <Ellipse Width="4" Height="4" Fill="White" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,2" IsHitTestVisible="False"
+                                 Visibility="{Binding Shuffle, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
                     <Button Grid.Column="1" Style="{StaticResource IconBtn}" Content="&#xE892;" Tag="prev" Click="OnAction" ToolTip="Previous"/>
                     <Button Grid.Column="2" Style="{StaticResource IconBtn}" Content="{Binding PlayGlyph}" Tag="toggle" Click="OnAction" FontSize="22" Width="44" Height="44" ToolTip="Play / pause"/>
                     <Button Grid.Column="3" Style="{StaticResource IconBtn}" Content="&#xE893;" Tag="next" Click="OnAction" ToolTip="Next"/>
-                    <Button Grid.Column="4" Style="{StaticResource IconBtn}" Content="{Binding RepeatGlyph}" FontSize="14" Foreground="{Binding RepeatBrush}" Tag="repeat" Click="OnAction" IsEnabled="{Binding CanRepeat}" ToolTip="Repeat"/>
+                    <Grid Grid.Column="4">
+                        <Button Style="{StaticResource IconBtn}" Content="{Binding RepeatGlyph}" FontSize="14" Foreground="{Binding RepeatBrush}" Tag="repeat" Click="OnAction" IsEnabled="{Binding CanRepeat}" ToolTip="Repeat"/>
+                        <Ellipse Width="4" Height="4" Fill="White" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,2" IsHitTestVisible="False"
+                                 Visibility="{Binding RepeatOn, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
                 </Grid>
 
-                <!-- volume -->
-                <DockPanel Grid.Row="3" Margin="4,8,4,0">
+                <!-- volume, and where the sound goes (like AirPlay) -->
+                <DockPanel Grid.Row="3" Margin="4,8,0,0">
                     <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="&#xE993;" FontSize="12" Foreground="{DynamicResource IslandMute}"/>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconBtn}" Content="&#xE7F5;" FontSize="13" Width="28" Height="28" Margin="4,0,0,0"
+                            Tag="outputs" Click="OnAction" ToolTip="Play on… (speakers, headphones)"/>
                     <TextBlock DockPanel.Dock="Right" Style="{StaticResource Glyph}" Text="&#xE995;" FontSize="12" Foreground="{DynamicResource IslandMute}"/>
                     <c:ProgressLine Height="5" Margin="10,0" VerticalAlignment="Center" Value="{Binding Volume}" Track="{DynamicResource IslandTrack}" Fill="White"
                                     Interactive="True" LiveUpdate="True" ValueChosen="OnVolume" Cursor="Hand"/>
                 </DockPanel>
             </Grid>
+        </DataTemplate>
+
+        <!-- pick speakers / headphones -->
+        <DataTemplate x:Key="media-out">
+            <DockPanel Margin="10,10,10,10">
+                <DockPanel DockPanel.Dock="Top" Margin="6,0,0,6">
+                    <Button DockPanel.Dock="Left" Style="{StaticResource IconBtn}" Content="&#xE72B;" FontSize="12" Width="28" Height="28" Tag="outputs" Click="OnAction" ToolTip="Back"/>
+                    <TextBlock Text="Play on" Style="{StaticResource Head}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Tag="{Binding Tag}" Click="OnAction" Focusable="False" Cursor="Hand" Height="36" HorizontalContentAlignment="Stretch">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bg" Background="Transparent" CornerRadius="10" Padding="10,0">
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource IslandHover}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="{Binding Glyph}" FontSize="15" Width="22"/>
+                                    <TextBlock DockPanel.Dock="Right" Style="{StaticResource Glyph}" Text="{Binding Check}" FontSize="13" Foreground="{DynamicResource Accent}"/>
+                                    <TextBlock Text="{Binding Name}" Foreground="{DynamicResource IslandFg}" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
         </DataTemplate>
 
         <!-- paused from the island: a tiny dot you can click to reopen the player -->
@@ -286,6 +332,27 @@
                 <Button Grid.Column="3" Style="{StaticResource PillBtn}" Content="{Binding Button1}" Tag="{Binding Tag1}" Click="OnAction" Margin="10,0,0,0" Padding="11,5"
                         Visibility="{Binding Button1, Converter={StaticResource NullToCollapsed}}"/>
             </Grid>
+        </DataTemplate>
+
+        <!-- ============ CHARGING: bolt + "Charging", ring fills to the battery level ============ -->
+        <DataTemplate x:Key="charging">
+            <DockPanel Margin="14,0,8,0">
+                <Grid DockPanel.Dock="Right" Width="28" Height="28" VerticalAlignment="Center">
+                    <c:RingProgress Thickness="3" Sweep="True" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{Binding RightBrush}"/>
+                    <TextBlock Text="{Binding Right}" FontSize="9" FontWeight="Bold" Foreground="{Binding RightBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+                <TextBlock Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}"/>
+                <TextBlock Margin="10,0" Text="{Binding Title}" Style="{StaticResource Head}" VerticalAlignment="Center"/>
+            </DockPanel>
+        </DataTemplate>
+
+        <!-- ============ JARVIS ANSWER (AI brain): text that wraps ============ -->
+        <DataTemplate x:Key="answer">
+            <DockPanel Margin="16,11,16,10">
+                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Glyph}" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}" FontSize="17" VerticalAlignment="Top" Margin="0,1,12,0"/>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding Subtitle}" Style="{StaticResource Mute}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource IslandFg}" FontSize="13.5" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" LineHeight="19"/>
+            </DockPanel>
         </DataTemplate>
 
         <!-- ============ TWO-LINE CARD (deadline, download done, earbuds) ============ -->
@@ -518,7 +585,11 @@
             <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" Foreground="{DynamicResource Accent}" FontSize="14"/>
         </DataTemplate>
         <DataTemplate x:Key="b-xfer">
-            <c:RingProgress Width="18" Height="18" Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+            <!-- an arrow inside, so it isn't told apart from the timer ring by colour alone -->
+            <Grid Width="20" Height="20">
+                <c:RingProgress Thickness="2.5" Value="{Binding Progress}" Track="{DynamicResource IslandTrack}" Fill="{DynamicResource Accent}"/>
+                <TextBlock Style="{StaticResource Glyph}" Text="&#xE74A;" FontSize="8" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center"/>
+            </Grid>
         </DataTemplate>
     </Window.Resources>
 
