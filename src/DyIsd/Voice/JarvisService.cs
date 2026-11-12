@@ -1,0 +1,556 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
+using DyIsd.Island;
+using DyIsd.Settings;
+
+namespace DyIsd.Voice;
+
+/// <summary>
+/// Jarvis: hold Ctrl + Space (or say "Jarvis …") and talk. What you say is turned into text on
+/// this laptop (Whisper), matched against a long list of commands (no AI), and done.
+/// The island shows that it's listening, what it heard and what it did.
+/// </summary>
+public sealed class JarvisService : IDisposable
+{
+    public JarvisState State { get; } = new();
+    /// <summary>Model downloaded / downloading / ready changed (for the Control Center).</summary>
+    public event Action? StatusChanged;
+
+    readonly App _app;
+    readonly IslandController _island;
+    readonly AudioInput _audio = new();
+    readonly SpeechEngine _speech = new();
+    readonly CommandRunner _runner;
+    readonly Dispatcher _ui = Application.Current.Dispatcher;
+    readonly DispatcherTimer _armTimer = new() { Interval = TimeSpan.FromSeconds(8) };
+
+    bool _ptt, _busy, _downloading;
+    DateTime _armedUntil;
+    Reply? _pending;
+    DateTime _pendingUntil;
+    DateTime _lastLevel;
+
+    static AppSettings S => SettingsStore.Current;
+
+    public JarvisService(App app, IslandController island)
+    {
+        _app = app;
+        _island = island;
+        _runner = new CommandRunner(app);
+        _armTimer.Tick += (_, _) =>
+        {
+            _armTimer.Stop();
+            if (_busy || _ptt) return;
+            _armedUntil = default;
+            _pending = null;
+            _audio.EndQuietMs = 420;
+            _island.EndJarvis();
+        };
+    }
+
+    public bool ModelReady => File.Exists(SpeechEngine.ModelPath);
+    public bool Downloading => _downloading;
+    public double DownloadProgress { get; private set; }
+    public string Runtime => _speech.Runtime;
+
+    public void Start()
+    {
+        AppCatalog.Load();
+        // New default microphone: reopen on it, or Jarvis keeps listening to the old one.
+        _app.Volume.MicChanged += () =>
+        {
+            if (!_audio.IsOpen || _ptt) return;
+            Log.Write("jarvis: default microphone changed, reopening");
+            _audio.Close();
+            Apply();
+        };
+        _audio.Phrase += samples => _ui.BeginInvoke(() => _ = OnPhraseAsync(samples));
+        _audio.Level += level =>
+        {
+            // ~20 updates a second is plenty for the wave.
+            if (DateTime.Now - _lastLevel < TimeSpan.FromMilliseconds(45)) return;
+            _lastLevel = DateTime.Now;
+            _ui.BeginInvoke(() => State.Level = level);
+        };
+        _speech.Downloading += p => _ui.BeginInvoke(() =>
+        {
+            DownloadProgress = p;
+            _island.ShowJarvisCard("\uE896", "Accent", "Downloading Jarvis's ears", "One time · stays on this laptop", $"{(int)(p * 100)}%", null, null, 320, 60000);
+            StatusChanged?.Invoke();
+        });
+        Apply();
+    }
+
+    /// <summary>Settings changed: open or close the microphone to match.</summary>
+    public void Apply()
+    {
+        bool wake = S.JarvisEnabled && S.JarvisWakeWord && ModelReady;
+        try
+        {
+            if (wake)
+            {
+                _audio.Open();
+                _audio.Listening = true;
+            }
+            else
+            {
+                _audio.Listening = false;
+                if (!_ptt) _audio.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("jarvis mic", ex);
+        }
+        // Load the model into memory now, so the first command isn't slow.
+        if (S.JarvisEnabled && ModelReady) _ = WarmUpAsync();
+        // Cloud ears on: the laptop only needs the small wake-word model; fetch it quietly.
+        if (S.JarvisEnabled && SpeechEngine.WantsSwap) _ = _speech.SwapQuietlyAsync();
+    }
+
+    async Task WarmUpAsync()
+    {
+        try
+        {
+            await _speech.EnsureStartedAsync();
+            StatusChanged?.Invoke();
+        }
+        catch { }
+    }
+
+    // ---------------- push to talk ----------------
+
+    public void PttDown()
+    {
+        if (!S.JarvisEnabled || _ptt) return;
+        if (!ModelReady)
+        {
+            OfferDownload();
+            return;
+        }
+        try
+        {
+            _audio.Open();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("jarvis mic", ex);
+            _island.ShowJarvisCard("\uE720", "Bad", "Can't use the microphone", "Settings › Privacy › Microphone › let desktop apps use it", null, null, null, 400, 6000);
+            Chime.Error();
+            return;
+        }
+        _ptt = true;
+        _audio.BeginTake();
+        _armTimer.Stop();
+        ShowListening("Listening…");
+        Chime.Listen();
+    }
+
+    public void PttUp()
+    {
+        if (!_ptt) return;
+        _ptt = false;
+        var samples = _audio.EndTake();
+        if (!(S.JarvisWakeWord && S.JarvisEnabled)) _audio.Close();
+        if (samples.Length < AudioInput.Rate * 35 / 100)
+        {
+            _island.EndJarvis(); // a tap, not a command
+            return;
+        }
+        _ = HearAsync(samples, requireWake: false);
+    }
+
+    // ---------------- always listening ----------------
+
+    async Task OnPhraseAsync(float[] samples)
+    {
+        if (_busy || _ptt || !S.JarvisEnabled) return;
+        // Works during calls too: it only acts when you say "Jarvis" first.
+        bool armed = DateTime.Now < _armedUntil;
+        _audio.EndQuietMs = 420;
+        await HearAsync(samples, requireWake: !armed);
+    }
+
+    static readonly Regex Wake = new(@"^\W*(?:(?:hey|hi|ok|okay|yo|oh|uh|um|so)\W+){0,2}(?:jarvis|jervis|javis|jaras|jarus|jarous|jarvas|jarves|jarvus|jarviss|charvis|jarbis|jaris|travis|gervais|jarbus|jarvez)(?:['’]s)?\b[\s,.!?:;-]*", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Where the wake word ends in what was heard, or -1 if it isn't there. Whisper spells the
+    /// name many ways ("Jervis", "Javis", "Jarvis's"), so close spellings in the first three
+    /// words count too.
+    /// </summary>
+    static int WakeLength(string text)
+    {
+        var m = Wake.Match(text);
+        if (m.Success) return m.Length;
+        foreach (Match w in Regex.Matches(text, @"[A-Za-z']+"))
+        {
+            if (w.Index > 24) break; // only near the start
+            var word = w.Value.ToLowerInvariant().Replace("'s", "").Replace("'", "");
+            // Must sound like it: starts with j / g / ch / y / tr and has the "v" ("Paris" doesn't count).
+            if (word.Length is >= 5 and <= 8 && "jgcytd".Contains(word[0]) && word.Contains('v') && Fuzzy.Score(word, "jarvis") >= 0.66)
+            {
+                int end = w.Index + w.Length;
+                while (end < text.Length && !char.IsLetterOrDigit(text[end])) end++;
+                return end;
+            }
+        }
+        return -1;
+    }
+
+    async Task HearAsync(float[] samples, bool requireWake)
+    {
+        _busy = true;
+        if (!requireWake) ShowThinking();
+        try
+        {
+            // Push to talk with cloud ears: straight to Groq. Always listening: the laptop checks
+            // for "Jarvis" first, so only commands are ever sent.
+            var t0 = DateTime.Now;
+            string text = !requireWake && CloudEars.Enabled ? await CloudTextAsync(samples) ?? await _speech.TranscribeAsync(samples)
+                                                            : await _speech.TranscribeAsync(samples);
+            var localMs = (DateTime.Now - t0).TotalMilliseconds;
+            if (requireWake)
+            {
+                int cut = WakeLength(text);
+                if (cut < 0)
+                {
+                    // Just people talking. Log only what starts like a name, to tune the wake word.
+                    if (Regex.IsMatch(text, @"^\W*(?:\w+\W+){0,2}[jcgtdh]\w*[aeiou]\w*v", RegexOptions.IgnoreCase))
+                        Log.Write("jarvis ignored (no wake word): " + (text.Length > 60 ? text[..60] + "…" : text));
+                    return;
+                }
+                Log.Write($"jarvis heard: {text} (laptop {localMs:0} ms)");
+                // The laptop already understood it (a command the rules know, or just the name):
+                // skip the second, sharper listen and act now. Only unclear ones go to Groq.
+                var rest = text[cut..].Trim();
+                bool clear = IsNothing(rest) || CommandParser.Parse(rest, DateTime.Now).All(c => c.Kind != "unknown");
+                if (!clear && CloudEars.Enabled && await CloudTextAsync(samples) is { } sharper)
+                {
+                    int c = WakeLength(sharper);
+                    text = c >= 0 ? sharper : text[..cut] + sharper; // keep the name so the cut below works
+                    cut = WakeLength(text);
+                }
+                text = text[cut..].Trim();
+                // "Jarvis. Jarvis." — said it twice: still just the name.
+                for (int c2; (c2 = WakeLength(text)) >= 0 && text.Length > 0; ) text = text[c2..].Trim();
+                if (IsNothing(text))
+                {
+                    Arm("Yes?");
+                    return;
+                }
+                ShowThinking();
+            }
+            else
+            {
+                Log.Write("jarvis heard: " + text);
+                int cut = WakeLength(text);
+                if (cut > 0) text = text[cut..].Trim();
+                if (_pending == null && (IsNothing(text) || Regex.IsMatch(text, @"^\W*(yeah|yes|yep|yo|okay|ok|hmm+|uh+|um+|so|and|hello|hi|hey)\W*$", RegexOptions.IgnoreCase)))
+                {
+                    Arm("Yes?", chime: false);
+                    return;
+                }
+            }
+
+            if (IsNothing(text))
+            {
+                ShowReply("", new Reply("\uE720", "Orange", "Didn't hear anything", Failed: true));
+                return;
+            }
+            await ActAsync(text);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("jarvis", ex);
+            ShowReply("", new Reply("\uE783", "Bad", "Jarvis hit a problem · see log", Failed: true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>The --hear self-check: a 16 kHz mono WAV through both ears and the rules, into the log.</summary>
+    public static async Task HearFileAsync(string wav)
+    {
+        using var reader = new NAudio.Wave.WaveFileReader(wav);
+        var pcm = new byte[reader.Length];
+        int n = reader.Read(pcm, 0, pcm.Length);
+        var samples = new float[n / 2];
+        for (int i = 0; i < samples.Length; i++) samples[i] = BitConverter.ToInt16(pcm, i * 2) / 32768f;
+
+        using var engine = new SpeechEngine();
+        await engine.EnsureStartedAsync();
+        var t0 = DateTime.Now;
+        var local = await engine.TranscribeAsync(samples);
+        Log.Write($"hear test: laptop took {(DateTime.Now - t0).TotalMilliseconds:0} ms ({engine.Runtime})");
+        var cloud = CloudEars.Enabled ? await CloudEars.TranscribeAsync(samples, SpeechEngine.CloudPrompt()) : null;
+        foreach (var (who, text) in new[] { ("laptop", local), ("cloud", cloud == null ? null : SpeechEngine.Clean(cloud)) })
+        {
+            if (text == null) continue;
+            int cut = WakeLength(text);
+            var cmd = cut >= 0 ? text[cut..].Trim() : text;
+            var cmds = CommandParser.Parse(cmd, DateTime.Now);
+            Log.Write($"hear test [{Path.GetFileName(wav)}] {who}: \"{text}\" wake={(cut >= 0)} → {string.Join(" | ", cmds.Select(c => c.Kind + ":" + c.Text))}");
+        }
+    }
+
+    async Task<string?> CloudTextAsync(float[] samples)
+    {
+        var t = await CloudEars.TranscribeAsync(samples, SpeechEngine.CloudPrompt());
+        return t == null ? null : SpeechEngine.Clean(t);
+    }
+
+    /// <summary>Whisper's "nothing was said" outputs.</summary>
+    static bool IsNothing(string text)
+    {
+        var t = Regex.Replace(text.ToLowerInvariant(), @"[^a-z0-9 ]", "").Trim();
+        return t.Length == 0 || t is "you" or "bye" or "thanks for watching" or "thank you for watching" or "so" or "uh" or "um" or "hmm";
+    }
+
+    void Arm(string prompt, bool chime = true)
+    {
+        _armedUntil = DateTime.Now.AddSeconds(8);
+        _audio.EndQuietMs = 900; // you're thinking of the words: don't cut you off mid-sentence
+        ShowListening(prompt);
+        if (chime) { _audio.DeafUntil = DateTime.Now.AddMilliseconds(350); Chime.Listen(); }
+        _armTimer.Stop();
+        _armTimer.Start();
+    }
+
+    async Task ActAsync(string text)
+    {
+        _armedUntil = default;
+        _armTimer.Stop();
+        // One of your modes? ("Claude mode", "end Claude mode")
+        if (_pending == null && Modes.Match(text, S.JarvisModes) is var (mode, end))
+        {
+            ShowReply(text, end ? await _runner.EndModeAsync(mode) : await RunModeAsync(mode));
+            return;
+        }
+        var cmds = CommandParser.Parse(text, DateTime.Now);
+
+        // Answering an "are you sure?"
+        if (_pending != null)
+        {
+            var pending = _pending;
+            _pending = null;
+            if (DateTime.Now < _pendingUntil)
+            {
+                if (cmds[0].Kind == "yes") { ShowReply(text, await pending.Confirm!()); return; }
+                if (cmds[0].Kind == "cancel") { ShowReply(text, new Reply("\uE711", "Accent", "Cancelled")); return; }
+            }
+        }
+
+        // The rules didn't get it (or it's a question): ask the brain, if you've set one up.
+        if (Brain.Enabled && NeedsBrain(text, cmds))
+        {
+            await AskBrainAsync(text);
+            return;
+        }
+
+        var reply = await _runner.RunAsync(cmds);
+        // "Open" something that isn't an app: maybe the brain knows what you meant.
+        if (reply.Failed && Brain.Enabled && cmds.All(c => c.Kind is "bare" or "open" or "unknown"))
+        {
+            await AskBrainAsync(text);
+            return;
+        }
+        await HandleReplyAsync(text, reply);
+    }
+
+    static readonly Regex Question = new(@"^(what|what's|whats|who|who's|whom|whose|when|where|why|how|which|is|are|was|were|can|could|does|do|did|should|will|would|tell me|explain|define|meaning of|translate)\b", RegexOptions.IgnoreCase);
+
+    static bool NeedsBrain(string text, List<Cmd> cmds)
+    {
+        if (cmds.Any(c => c.Kind == "unknown")) return true;
+        // A question the rules would only turn into a Google search: answer it instead.
+        return cmds.Count == 1 && cmds[0].Kind == "url" && cmds[0].Text.Contains("google.com/search")
+            && Question.IsMatch(text.Trim()) && !Regex.IsMatch(text, @"^(search|google|look up|find)\b", RegexOptions.IgnoreCase);
+    }
+
+    string BrainContext()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Now: " + DateTime.Now.ToString("dddd d MMMM yyyy, h:mm tt"));
+        sb.AppendLine("App in front: " + (_app.Foreground.Current.Length > 0 ? _app.Foreground.Current : "none"));
+        if (_app.Media.State.IsActive) sb.AppendLine($"Playing: {_app.Media.State.Title} · {_app.Media.State.Artist} ({_app.Media.State.Source})");
+        sb.AppendLine("Installed apps: " + string.Join(", ", AppCatalog.SpokenNames(60)));
+        if (S.JarvisModes.Count > 0) sb.AppendLine("Modes: " + string.Join(", ", S.JarvisModes.Select(m => m.Name)));
+        if (S.WhatsAppContacts.Count > 0) sb.AppendLine("WhatsApp contacts: " + string.Join(", ", S.WhatsAppContacts.Select(c => c.Name)));
+        return sb.ToString();
+    }
+
+    async Task AskBrainAsync(string text)
+    {
+        Brain.Answer? a;
+        try { a = await Brain.AskAsync(text, BrainContext()); }
+        catch (Brain.BrainException ex)
+        {
+            ShowReply(text, new Reply("\uE783", "Orange", ex.Message, Failed: true));
+            return;
+        }
+        if (a == null) return;
+
+        if (a.Do.Count == 0)
+        {
+            if (a.Say.Length == 0) { ShowReply(text, new Reply("\uE897", "Orange", "Didn't get that", Failed: true)); return; }
+            _island.ShowJarvisAnswer(a.Say, text);
+            Chime.Done();
+            return;
+        }
+
+        // Run what the brain wrote through the normal rules, one by one, like you'd said it.
+        Reply? last = null;
+        foreach (var line in a.Do)
+        {
+            if (Modes.Match(line, S.JarvisModes) is var (mode, end))
+            {
+                last = end ? await _runner.EndModeAsync(mode) : await RunModeAsync(mode);
+                continue;
+            }
+            var parsed = CommandParser.Parse(line, DateTime.Now);
+            if (parsed.Any(c => c.Kind == "unknown"))
+            {
+                Log.Write("brain wrote something the rules don't know: " + line);
+                continue;
+            }
+            last = await _runner.RunAsync(parsed);
+            if (last.Confirm != null) break; // "are you sure?" waits for you
+        }
+        if (last == null)
+        {
+            ShowReply(text, new Reply("\uE897", "Orange", a.Say.Length > 0 ? a.Say : "Didn't get that", Failed: true));
+            return;
+        }
+        if (last.Confirm == null && !last.Failed && a.Say.Length > 0 && !last.Silent) last = last with { Text = a.Say };
+        await HandleReplyAsync(text, last);
+    }
+
+    Task HandleReplyAsync(string text, Reply reply)
+    {
+        if (reply.Confirm != null)
+        {
+            _pending = reply;
+            _pendingUntil = DateTime.Now.AddSeconds(10);
+            _armedUntil = _pendingUntil; // "yes" works without saying "Jarvis" again
+            _audio.DeafUntil = DateTime.Now.AddMilliseconds(350);
+            _island.ShowJarvisCard(reply.Glyph, reply.Brush, reply.Text, $"“{text}” · say yes or no", null, "Yes", "No", 380, 10000);
+            Chime.Listen();
+            _armTimer.Stop();
+            _armTimer.Interval = TimeSpan.FromSeconds(10);
+            _armTimer.Start();
+            return Task.CompletedTask;
+        }
+        ShowReply(text, reply);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Runs a mode, showing each step on the island as it goes.</summary>
+    async Task<Reply> RunModeAsync(JarvisMode mode)
+    {
+        Log.Write($"jarvis: mode \"{mode.Name}\"");
+        return await _runner.RunModeAsync(mode, step =>
+        {
+            State.Text = step;
+            State.IsListening = false;
+            _island.ShowJarvis(State);
+        });
+    }
+
+    /// <summary>The ▶ button next to a mode in the Control Center.</summary>
+    public async void StartMode(JarvisMode mode)
+    {
+        if (_busy) return;
+        _busy = true;
+        try { ShowReply("", await RunModeAsync(mode)); }
+        catch (Exception ex) { Log.Error("mode", ex); }
+        finally { _busy = false; }
+    }
+
+    /// <summary>The island's Yes / No buttons on a confirmation.</summary>
+    public async void Confirm(bool yes)
+    {
+        var pending = _pending;
+        _pending = null;
+        _armedUntil = default;
+        if (pending?.Confirm == null) { _island.EndJarvis(); return; }
+        ShowReply("", yes ? await pending.Confirm() : new Reply("\uE711", "Accent", "Cancelled"));
+    }
+
+    // ---------------- island ----------------
+
+    void ShowListening(string text)
+    {
+        State.Text = text;
+        State.IsListening = true;
+        _island.ShowJarvis(State);
+    }
+
+    void ShowThinking()
+    {
+        State.Text = "Got it…";
+        State.IsListening = false;
+        _island.ShowJarvis(State);
+    }
+
+    void ShowReply(string heard, Reply r)
+    {
+        _armTimer.Interval = TimeSpan.FromSeconds(8);
+        if (r.Silent && !r.Failed)
+        {
+            // Volume, brightness and media show their own pop-ups, which replace Jarvis's.
+            // If nothing replaces it (volume was already there), close it shortly after.
+            _ = Task.Delay(600).ContinueWith(_ => _ui.BeginInvoke(_island.EndJarvis));
+            Chime.Done();
+            return;
+        }
+        string? sub = heard.Length > 0 ? $"“{heard}”" : null;
+        _island.ShowJarvisCard(r.Glyph, r.Brush, r.Text, sub, null, null, null, 0, r.Failed ? 5000 : 3600);
+        if (r.Failed) Chime.Error(); else Chime.Done();
+    }
+
+    // ---------------- first-time download ----------------
+
+    void OfferDownload()
+    {
+        if (_downloading) return;
+        _island.ShowJarvisCard("\uE720", "Accent", "Jarvis needs a one-time download", "Speech model · 470 MB · runs on this laptop", null, "Download", "Later", 400, 12000);
+    }
+
+    public async void StartDownload()
+    {
+        if (_downloading || ModelReady) return;
+        _downloading = true;
+        StatusChanged?.Invoke();
+        try
+        {
+            await _speech.EnsureStartedAsync();
+            _island.ShowJarvisCard("\uE73E", "Good", "Jarvis is ready", "Hold Ctrl + Space and talk, or say “Jarvis”", null, null, null, 380, 6000);
+            Chime.Done();
+        }
+        catch (Exception ex)
+        {
+            _island.ShowJarvisCard("\uE783", "Bad", "Download failed", ex.Message, null, null, null, 380, 6000);
+            Chime.Error();
+        }
+        finally
+        {
+            _downloading = false;
+            StatusChanged?.Invoke();
+            Apply();
+        }
+    }
+
+    public void Dispose()
+    {
+        _audio.Dispose();
+        _speech.Dispose();
+    }
+}

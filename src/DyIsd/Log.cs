@@ -1,0 +1,53 @@
+using System;
+using System.Linq;
+using System.IO;
+
+namespace DyIsd;
+
+/// <summary>Tiny file logger. Logs live in %LOCALAPPDATA%\DyIsd\log.txt.</summary>
+internal static class Log
+{
+    static readonly object Gate = new();
+
+    public static string Dir =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DyIsd");
+
+    /// <summary>
+    /// Where Dir really is on disk. When DyIsd is installed (MSIX), Windows quietly redirects its
+    /// files into the app's private folder, which File Explorer can't reach through Dir.
+    /// </summary>
+    public static string RealDir
+    {
+        get
+        {
+            try
+            {
+                if (Native.Win32.IsPackaged)
+                    return Path.Combine(Windows.Storage.ApplicationData.Current.LocalCacheFolder.Path, "Local", "DyIsd");
+            }
+            catch { }
+            return Dir;
+        }
+    }
+
+    public static void Write(string message)
+    {
+        try
+        {
+            lock (Gate)
+            {
+                Directory.CreateDirectory(Dir);
+                var file = Path.Combine(Dir, "log.txt");
+                if (File.Exists(file) && new FileInfo(file).Length > 512 * 1024) File.Delete(file);
+                File.AppendAllText(file, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
+            }
+        }
+        catch
+        {
+            // Logging must never crash the app.
+        }
+    }
+
+    public static void Error(string where, Exception ex) =>
+        Write($"[{where}] {ex.GetType().Name}: {ex.Message} | at {ex.StackTrace?.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Contains("DyIsd.")) ?? "?"}");
+}

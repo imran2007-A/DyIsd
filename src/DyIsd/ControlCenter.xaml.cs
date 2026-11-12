@@ -1,0 +1,1269 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using DyIsd.Controls;
+using DyIsd.Native;
+using DyIsd.Services;
+using DyIsd.Settings;
+using DyIsd.Voice;
+
+namespace DyIsd;
+
+/// <summary>
+/// The black panel that drops down from the island: focus timer, deadlines, calendar link,
+/// feature on/off tiles, position and options. Opens from the tray icon or the island.
+/// </summary>
+public partial class ControlCenter : Window
+{
+    readonly App _app;
+    readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(30) };
+    static AppSettings S => SettingsStore.Current;
+
+    // What's being typed into the "add deadline" form.
+    DateTime? _day;
+    TimeSpan? _time;
+    static readonly int[] DefaultBefore = { 1440, 120, 30 };
+    readonly HashSet<int> _before = new(DefaultBefore);
+    string _repeat = "none";
+    TimeSpan _repeatAt = new(9, 0, 0);
+    readonly List<DateTime> _extra = new();
+    DateTime _extraDay = DateTime.Today.AddDays(1);
+
+    public DateTime ClosedAt { get; private set; }
+
+    public ControlCenter(App app)
+    {
+        _app = app;
+        InitializeComponent();
+        try { Logo.Source = new BitmapImage(new Uri("pack://application:,,,/Assets/icon.png")); } catch { }
+
+        BuildFocusChips();
+        BuildDayChips();
+        BuildTimeChips();
+        BuildReminderChips();
+        BuildTiles();
+        BuildPositions();
+        BuildOptions();
+        RefreshAll();
+
+        NewTitle.TextChanged += (_, _) => UpdatePreview();
+        BuildKindChips();
+        StepValue.KeyDown += (_, e) => { if (e.Key == Key.Enter) StepAdd_Click(this, new RoutedEventArgs()); };
+        ModeName.TextChanged += (_, _) => UpdateModeHint();
+        NewTitle.KeyDown += (_, e) => { if (e.Key == Key.Enter && AddBtn.IsEnabled) Add_Click(this, new RoutedEventArgs()); };
+        CustomTime.TextChanged += (_, _) =>
+        {
+            if (TryParseTime(CustomTime.Text, out var t)) { _time = t; UncheckAll(TimeChips); }
+            else if (CustomTime.Text.Length > 0) _time = null;
+            UpdatePreview();
+        };
+
+        RepeatTime.TextChanged += (_, _) =>
+        {
+            if (TryParseTime(RepeatTime.Text, out var t)) _repeatAt = t;
+            else if (RepeatTime.Text.Length == 0) _repeatAt = new TimeSpan(9, 0, 0);
+            UpdatePreview();
+        };
+        ExtraTime.TextChanged += (_, _) => UpdatePreview();
+
+        _refresh.Tick += (_, _) => { RefreshDeadlines(); RefreshFocus(); };
+        _app.Timer.PropertyChanged += OnTimerChanged;
+        _app.Jarvis.StatusChanged += RefreshJarvis;
+        Deactivated += (_, _) => Close();
+        Closed += (_, _) =>
+        {
+            ClosedAt = DateTime.Now;
+            _refresh.Stop();
+            _app.Timer.PropertyChanged -= OnTimerChanged;
+            _app.Jarvis.StatusChanged -= RefreshJarvis;
+        };
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+
+        var v = typeof(App).Assembly.GetName().Version;
+        Footer.Text = $"DyIsd {v?.ToString(3)} · right-click the tray icon for quick actions";
+    }
+
+    void OnTimerChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e) => RefreshFocus();
+
+    /// <summary>Opens under the island, on the same side, with a spring.</summary>
+    public void Open(IntPtr island, string pos)
+    {
+        // Real pixels, so it opens under the island on whichever monitor the island is on.
+        Monitors.GetWindowRect(island, out var r);
+        var mon = Monitors.Of(island);
+        var work = Monitors.Work(mon);
+        double scale = Monitors.Scale(mon);
+        int width = (int)Math.Round(Width * scale);
+        int x = pos switch { "left" => r.Left, "right" => r.Right - width, _ => r.Left + (r.Width - width) / 2 };
+        int y = r.Top + (int)Math.Round(44 * scale);
+        Panel.RenderTransformOrigin = new Point(pos == "left" ? 0.05 : pos == "right" ? 0.95 : 0.5, 0);
+        // Fit small laptop screens: scroll inside the panel instead of running off the bottom.
+        Scroller.MaxHeight = Math.Min(640, (work.Bottom - y) / scale - 40);
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+        Monitors.Place(this, hwnd, x, y);
+        Show();
+        Activate();
+        _refresh.Start();
+
+        if (!SystemParameters.ClientAreaAnimation) return;
+        var spring = new SpringEase();
+        PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.85, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = spring });
+        PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.85, 1, TimeSpan.FromMilliseconds(520)) { EasingFunction = spring });
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
+    }
+
+    void RefreshAll()
+    {
+        RefreshJarvis();
+        RefreshModes();
+        RefreshContacts();
+        RefreshFocus();
+        RefreshDeadlines();
+        RefreshCalendar();
+        RefreshSync();
+        RefreshTiles();
+        RefreshPositions();
+        PauseBtn.Content = _app.IslandPaused ? "Resume island" : "Pause island";
+        UpdatePreview();
+    }
+
+    // ================= jarvis =================
+
+    void RefreshJarvis()
+    {
+        var j = _app.Jarvis;
+        if (j.Downloading)
+        {
+            JarvisBtn.Content = $"{(int)(j.DownloadProgress * 100)}%";
+            JarvisBtn.IsEnabled = false;
+            JarvisSub.Text = "Downloading its ears (470 MB, one time). Keep DyIsd running.";
+        }
+        else if (!j.ModelReady)
+        {
+            JarvisBtn.Content = "Get it";
+            JarvisBtn.IsEnabled = true;
+            JarvisSub.Text = "Voice control, no AI, nothing leaves this laptop. Needs a one-time 470 MB download.";
+        }
+        else if (S.JarvisEnabled)
+        {
+            JarvisBtn.Content = "Turn off";
+            JarvisBtn.IsEnabled = true;
+            string where = j.Runtime.Length == 0 ? "" : j.Runtime.Contains("Vulkan", StringComparison.OrdinalIgnoreCase) ? " · on your graphics card" : " · on the processor";
+            var key = KeyText(S.JarvisKey, S.JarvisMods);
+            JarvisSub.Text = (S.JarvisWakeWord ? $"Hold {key} and talk, or say \u201CJarvis\u2026\u201D" : $"Hold {key} and talk") +
+                             ". Try \u201Copen chrome\u201D, \u201Cvolume 40\u201D, \u201Cremind me to study at 7\u201D." + where;
+        }
+        else
+        {
+            JarvisBtn.Content = "Turn on";
+            JarvisBtn.IsEnabled = true;
+            JarvisSub.Text = "Off. Ctrl + Space types a space like normal.";
+        }
+    }
+
+    void Jarvis_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_app.Jarvis.ModelReady)
+        {
+            if (!S.JarvisEnabled) { S.JarvisEnabled = true; SettingsStore.Save(); }
+            _app.Jarvis.StartDownload();
+        }
+        else
+        {
+            S.JarvisEnabled = !S.JarvisEnabled;
+            SettingsStore.Save();
+        }
+        RefreshJarvis();
+    }
+
+    // ================= modes =================
+
+    JarvisMode? _editing;           // the mode being edited (null = a new one)
+    readonly List<ModeStep> _steps = new();
+    string _kind = "open";
+
+    void RefreshModes()
+    {
+        ModeList.Children.Clear();
+        if (S.JarvisModes.Count == 0)
+        {
+            ModeList.Children.Add(new TextBlock
+            {
+                Text = "No modes yet. A mode runs several things at once: say \u201CClaude mode\u201D and it opens Claude, plays your playlist, sets the volume\u2026",
+                Style = (Style)FindResource("Sub"), Margin = new Thickness(14, 12, 14, 12), TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+        foreach (var m in S.JarvisModes.ToList())
+        {
+            var run = new Button { Style = (Style)FindResource("WhiteBtn"), Content = "\u25B6", ToolTip = "Start it now", VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(11, 5, 11, 5) };
+            run.Click += (_, _) => { Close(); _app.Jarvis.StartMode(m); };
+            var edit = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE70F", ToolTip = "Edit", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+            edit.Click += (_, _) => OpenEditor(m);
+            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE74D", ToolTip = "Delete", VerticalAlignment = VerticalAlignment.Center };
+            del.Click += (_, _) =>
+            {
+                S.JarvisModes.Remove(m);
+                SettingsStore.Save();
+                if (_editing == m) CloseEditor();
+                RefreshModes();
+            };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            buttons.Children.Add(run);
+            buttons.Children.Add(edit);
+            buttons.Children.Add(del);
+
+            var text = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+            text.Children.Add(new TextBlock { Text = m.Name, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock
+            {
+                Text = string.Join(" \u00B7 ", m.Steps.Select(Modes.Describe)), Style = (Style)FindResource("Sub"),
+                TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, TextWrapping = TextWrapping.Wrap,
+            });
+            var row = new DockPanel { Margin = new Thickness(14, 10, 8, 10) };
+            DockPanel.SetDock(buttons, Dock.Right);
+            row.Children.Add(buttons);
+            row.Children.Add(text);
+            ModeList.Children.Add(new Border
+            {
+                Child = row, BorderBrush = ThemeService.Brush("Chip"),
+                BorderThickness = new Thickness(0, ModeList.Children.Count == 0 ? 0 : 1, 0, 0),
+            });
+        }
+    }
+
+    void BuildKindChips()
+    {
+        foreach (var k in Modes.Kinds)
+        {
+            var chip = Chip(k.Label);
+            chip.Tag = k.Id;
+            chip.Click += (_, _) => PickKind(k.Id);
+            KindChips.Children.Add(chip);
+        }
+        PickKind("open");
+    }
+
+    void PickKind(string id)
+    {
+        _kind = id;
+        foreach (var c in KindChips.Children)
+            if (c is ToggleButton t) t.IsChecked = (string)t.Tag == id;
+        StepValue.Tag = Modes.KindOf(id).Hint;
+        StepError.Visibility = Visibility.Collapsed;
+    }
+
+    void NewMode_Click(object sender, RoutedEventArgs e) => OpenEditor(null);
+
+    void OpenEditor(JarvisMode? mode)
+    {
+        _editing = mode;
+        _steps.Clear();
+        if (mode != null) _steps.AddRange(mode.Steps.Select(s => new ModeStep { Kind = s.Kind, Value = s.Value }));
+        ModeName.Text = mode?.Name ?? "";
+        ModeCloseOnEnd.IsChecked = mode?.CloseOnEnd ?? true;
+        StepValue.Text = "";
+        PickKind("open");
+        RefreshSteps();
+        UpdateModeHint();
+        ModeEditor.Visibility = Visibility.Visible;
+        NewModeBtn.Visibility = Visibility.Collapsed;
+        ModeName.Focus();
+        ModeEditor.BringIntoView();
+    }
+
+    void CloseEditor()
+    {
+        _editing = null;
+        ModeEditor.Visibility = Visibility.Collapsed;
+        NewModeBtn.Visibility = Visibility.Visible;
+    }
+
+    void UpdateModeHint()
+    {
+        var n = ModeName.Text.Trim();
+        ModeSayHint.Text = n.Length == 0 ? "" : $"Say \u201C{n}\u201D or \u201Cstart {n}\u201D to run it, \u201Cend {n}\u201D to stop.";
+    }
+
+    void RefreshSteps()
+    {
+        StepList.Children.Clear();
+        if (_steps.Count == 0)
+        {
+            StepList.Children.Add(new TextBlock { Text = "No steps yet. Pick a type below, fill it in, press Add.", Style = (Style)FindResource("Sub"), Margin = new Thickness(12, 10, 12, 10), TextWrapping = TextWrapping.Wrap });
+            return;
+        }
+        for (int i = 0; i < _steps.Count; i++)
+        {
+            int at = i;
+            var step = _steps[i];
+            Button Small(string glyph, string tip, Action act)
+            {
+                var b = new Button { Style = (Style)FindResource("GhostIcon"), Content = glyph, ToolTip = tip, Padding = new Thickness(5), VerticalAlignment = VerticalAlignment.Center };
+                b.Click += (_, _) => { act(); RefreshSteps(); };
+                return b;
+            }
+            var tools = new StackPanel { Orientation = Orientation.Horizontal };
+            if (at > 0) tools.Children.Add(Small("\uE70E", "Move up", () => (_steps[at - 1], _steps[at]) = (_steps[at], _steps[at - 1])));
+            if (at < _steps.Count - 1) tools.Children.Add(Small("\uE70D", "Move down", () => (_steps[at + 1], _steps[at]) = (_steps[at], _steps[at + 1])));
+            tools.Children.Add(Small("\uE711", "Remove", () => _steps.RemoveAt(at)));
+
+            var icon = new TextBlock { Text = Modes.KindOf(step.Kind).Glyph, Style = (Style)FindResource("Icon"), FontSize = 13, Width = 22, VerticalAlignment = VerticalAlignment.Center };
+            var label = new TextBlock { Text = $"{at + 1}. {Modes.Describe(step)}", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var row = new DockPanel { Margin = new Thickness(10, 4, 4, 4) };
+            DockPanel.SetDock(tools, Dock.Right);
+            DockPanel.SetDock(icon, Dock.Left);
+            row.Children.Add(tools);
+            row.Children.Add(icon);
+            row.Children.Add(label);
+            StepList.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Card"), BorderThickness = new Thickness(0, at == 0 ? 0 : 1, 0, 0) });
+        }
+    }
+
+    void RefreshContacts()
+    {
+        ContactList.Children.Clear();
+        if (S.WhatsAppContacts.Count == 0)
+        {
+            ContactList.Children.Add(new TextBlock
+            {
+                Text = "Add the people you message. Then say \u201Cmessage Abhishek saying I\u2019m on my way\u201D and Jarvis opens that chat and asks before sending.",
+                Style = (Style)FindResource("Sub"), Margin = new Thickness(14, 12, 14, 12), TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+        foreach (var c in S.WhatsAppContacts.ToList())
+        {
+            var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE74D", ToolTip = "Delete", VerticalAlignment = VerticalAlignment.Center };
+            del.Click += (_, _) =>
+            {
+                S.WhatsAppContacts.Remove(c);
+                SettingsStore.Save();
+                RefreshContacts();
+            };
+            var text = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+            text.Children.Add(new TextBlock { Text = c.Name, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock { Text = "+" + c.Number, Style = (Style)FindResource("Sub") });
+            var row = new DockPanel { Margin = new Thickness(14, 10, 8, 10) };
+            DockPanel.SetDock(del, Dock.Right);
+            row.Children.Add(del);
+            row.Children.Add(text);
+            ContactList.Children.Add(new Border
+            {
+                Child = row, BorderBrush = ThemeService.Brush("Chip"),
+                BorderThickness = new Thickness(0, ContactList.Children.Count == 0 ? 0 : 1, 0, 0),
+            });
+        }
+    }
+
+    void ContactAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var name = ContactName.Text.Trim();
+        var number = WhatsApp.NormalizeNumber(ContactNumber.Text);
+        string? err = name.Length == 0 ? "Type their name, the way you\u2019ll say it"
+            : number == null ? "That number doesn\u2019t look right. Use 10 digits, or the full number with country code"
+            : null;
+        if (err != null)
+        {
+            ContactError.Text = err;
+            ContactError.Visibility = Visibility.Visible;
+            return;
+        }
+        ContactError.Visibility = Visibility.Collapsed;
+        S.WhatsAppContacts.RemoveAll(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+        S.WhatsAppContacts.Add(new WhatsAppContact { Name = name, Number = number! });
+        SettingsStore.Save();
+        ContactName.Text = ContactNumber.Text = "";
+        RefreshContacts();
+    }
+
+    void StepAdd_Click(object sender, RoutedEventArgs e)
+    {
+        var err = Modes.Validate(_kind, StepValue.Text);
+        if (err != null)
+        {
+            StepError.Text = err;
+            StepError.Visibility = Visibility.Visible;
+            return;
+        }
+        StepError.Visibility = Visibility.Collapsed;
+        _steps.Add(new ModeStep { Kind = _kind, Value = StepValue.Text.Trim() });
+        StepValue.Text = "";
+        RefreshSteps();
+    }
+
+    void ModeCancel_Click(object sender, RoutedEventArgs e) => CloseEditor();
+
+    void ModeSave_Click(object sender, RoutedEventArgs e)
+    {
+        var name = ModeName.Text.Trim();
+        // A step typed but not added yet still counts.
+        if (StepValue.Text.Trim().Length > 0 && Modes.Validate(_kind, StepValue.Text) == null)
+        {
+            _steps.Add(new ModeStep { Kind = _kind, Value = StepValue.Text.Trim() });
+            StepValue.Text = "";
+        }
+        string? problem = name.Length == 0 ? "Give it a name"
+            : _steps.Count == 0 ? "Add at least one step"
+            : S.JarvisModes.Any(m => m != _editing && string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase)) ? "You already have a mode with that name"
+            : null;
+        if (problem != null)
+        {
+            StepError.Text = problem;
+            StepError.Visibility = Visibility.Visible;
+            return;
+        }
+        var mode = _editing ?? new JarvisMode();
+        mode.Name = name;
+        mode.Steps = _steps.ToList();
+        mode.CloseOnEnd = ModeCloseOnEnd.IsChecked == true;
+        if (_editing == null) S.JarvisModes.Add(mode);
+        SettingsStore.Save();
+        CloseEditor();
+        RefreshModes();
+        _app.Island?.ShowMessage("\uE73E", "Good", $"Say \u201C{name}\u201D to Jarvis", 280, 2200);
+    }
+
+    // ================= focus =================
+
+    void BuildFocusChips()
+    {
+        foreach (int m in new[] { 15, 25, 45, 60 })
+        {
+            var chip = Chip($"{m} min");
+            chip.IsChecked = S.FocusMinutes == m;
+            chip.Click += (_, _) =>
+            {
+                S.FocusMinutes = m;
+                SettingsStore.Save();
+                foreach (ToggleButton c in FocusChips.Children) c.IsChecked = ReferenceEquals(c, chip);
+            };
+            FocusChips.Children.Add(chip);
+        }
+    }
+
+    void RefreshFocus()
+    {
+        var t = _app.Timer;
+        FocusTitle.Text = t.IsActive ? $"Focus · {t.RemainingText} left" : "Focus session";
+        FocusBtn.Content = t.IsActive ? "End" : "Start";
+        FocusBtn.Style = (Style)FindResource(t.IsActive ? "Btn" : "WhiteBtn");
+        FocusBtn.IsEnabled = S.Features.FocusTimer;
+    }
+
+    void Focus_Click(object sender, RoutedEventArgs e)
+    {
+        _app.ToggleFocus();
+        RefreshFocus();
+    }
+
+    // ================= deadlines =================
+
+    static Brush Urgency(TimeSpan left) =>
+        ThemeService.Brush(left < TimeSpan.FromHours(3) ? "Bad" : left < TimeSpan.FromDays(1) ? "Orange" : "Good");
+
+    void RefreshDeadlines()
+    {
+        DeadlineList.Children.Clear();
+        var now = DateTime.Now;
+        var items = _app.Calendar.Upcoming().Take(8).ToList();
+        if (items.Count == 0)
+        {
+            DeadlineList.Children.Add(new TextBlock
+            {
+                Text = "Nothing coming up. Add a deadline below.",
+                Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                Margin = new Thickness(14, 13, 14, 13),
+            });
+            return;
+        }
+
+        bool first = true;
+        foreach (var item in items)
+        {
+            var left = item.AllDay ? item.Start.Date.AddDays(1) - now : item.Start - now;
+            var row = new Grid { Margin = new Thickness(0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+
+            row.Children.Add(new Border { Background = Urgency(left), CornerRadius = new CornerRadius(0, 3, 3, 0), Margin = new Thickness(0, 8, 0, 8) });
+
+            var text = new StackPanel { Margin = new Thickness(12, 9, 8, 9) };
+            text.Children.Add(new TextBlock { Text = item.Title, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
+            text.Children.Add(new TextBlock
+            {
+                Text = When(item) + (!item.IsDeadline ? " · Calendar"
+                    : item.Manual?.Repeat == "daily" ? " · daily reminder"
+                    : item.Manual?.Repeat == "weekly" ? " · weekly reminder" : ""),
+                Style = (Style)FindResource("Sub"),
+            });
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+
+            var chip = new Border
+            {
+                Background = ThemeService.Brush("Chip"), CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 4, 8, 4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock { Text = item.AllDay && left < TimeSpan.FromDays(1) ? "Today" : Human(left), Foreground = Urgency(left), FontWeight = FontWeights.SemiBold, FontSize = 12 },
+            };
+            Grid.SetColumn(chip, 2);
+            row.Children.Add(chip);
+
+            if (item.IsDeadline)
+            {
+                var del = new Button { Style = (Style)FindResource("GhostIcon"), Content = "\uE711", ToolTip = "Remove", VerticalAlignment = VerticalAlignment.Center };
+                var key = item.Key;
+                del.Click += (_, _) =>
+                {
+                    S.ManualDeadlines.RemoveAll(d => $"m|{d.Title}|{d.Due:o}" == key);
+                    SettingsStore.Save();
+                    RefreshDeadlines();
+                };
+                Grid.SetColumn(del, 3);
+                row.Children.Add(del);
+            }
+
+            var wrap = new Border
+            {
+                Child = row,
+                BorderBrush = ThemeService.Brush("Chip"),
+                BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0),
+            };
+            first = false;
+            DeadlineList.Children.Add(wrap);
+        }
+    }
+
+    static string When(UpcomingItem i)
+    {
+        if (i.AllDay) return DayName(i.Start) + " · All day";
+        return DayName(i.Start) + " · " + i.Start.ToString("h:mm tt", CultureInfo.InvariantCulture);
+    }
+
+    static string DayName(DateTime d)
+    {
+        var days = (d.Date - DateTime.Today).Days;
+        return days == 0 ? "Today" : days == 1 ? "Tomorrow" : d.ToString("ddd, d MMM", CultureInfo.InvariantCulture);
+    }
+
+    static string Human(TimeSpan t)
+    {
+        if (t.TotalMinutes < 60) return $"{Math.Max(1, (int)Math.Round(t.TotalMinutes))} min";
+        if (t.TotalHours < 48)
+        {
+            int h = (int)t.TotalHours, m = (int)Math.Round(t.TotalMinutes - h * 60);
+            return m == 0 || h >= 10 ? $"{h}h" : $"{h}h {m}m";
+        }
+        return $"{(int)Math.Round(t.TotalDays)} days";
+    }
+
+    // ---- add form ----
+
+    void BuildDayChips()
+    {
+        foreach (var (label, offset) in new[] { ("Today", 0), ("Tomorrow", 1), ("Next week", 7) })
+        {
+            var chip = Chip(label);
+            chip.Click += (_, _) =>
+            {
+                _day = DateTime.Today.AddDays(offset);
+                UncheckAll(DayChips);
+                chip.IsChecked = true;
+                UpdatePreview();
+            };
+            DayChips.Children.Add(chip);
+        }
+    }
+
+    void DayPrev_Click(object s, RoutedEventArgs e) => StepDay(-1);
+    void DayNext_Click(object s, RoutedEventArgs e) => StepDay(1);
+
+    void StepDay(int by)
+    {
+        var d = (_day ?? DateTime.Today).AddDays(by);
+        if (d < DateTime.Today) return;
+        _day = d;
+        int offset = (d - DateTime.Today).Days;
+        int i = 0;
+        foreach (ToggleButton c in DayChips.Children) c.IsChecked = new[] { 0, 1, 7 }[i++] == offset;
+        UpdatePreview();
+    }
+
+    void BuildTimeChips()
+    {
+        foreach (var (label, time) in new[] { ("9:00 AM", new TimeSpan(9, 0, 0)), ("5:00 PM", new TimeSpan(17, 0, 0)), ("11:59 PM", new TimeSpan(23, 59, 0)) })
+        {
+            var chip = Chip(label);
+            chip.Click += (_, _) =>
+            {
+                _time = time;
+                UncheckAll(TimeChips);
+                chip.IsChecked = true;
+                CustomTime.Text = "";
+                _time = time;
+                UpdatePreview();
+            };
+            TimeChips.Children.Insert(TimeChips.Children.Count - 1, chip);
+        }
+    }
+
+    static bool TryParseTime(string s, out TimeSpan t) =>
+        TimeSpan.TryParseExact(s.Trim(), new[] { @"h\:mm", @"hh\:mm" }, CultureInfo.InvariantCulture, out t) && t < TimeSpan.FromDays(1);
+
+    DateTime? DraftDue => _day is DateTime d && _time is TimeSpan t ? d.Date + t : null;
+
+    void UpdatePreview()
+    {
+        DayLabel.Text = _day is DateTime d ? DayName(d) + (d.Date > DateTime.Today.AddDays(1) ? "" : d.ToString(" · d MMM", CultureInfo.InvariantCulture)) : "Pick a day";
+        var due = DraftDue;
+        bool hasTitle = NewTitle.Text.Trim().Length > 0;
+        AddBtn.IsEnabled = hasTitle && due > DateTime.Now;
+        AddPreview.Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF));
+        if (!hasTitle) AddPreview.Text = "";
+        else if (due == null) AddPreview.Text = _day == null ? "Pick a day" : "Pick a time";
+        else if (due <= DateTime.Now) { AddPreview.Text = "That time has already passed"; AddPreview.Foreground = ThemeService.Brush("Bad"); }
+        else AddPreview.Text = $"Due {DayName(due.Value)} at {due.Value.ToString("h:mm tt", CultureInfo.InvariantCulture)}. " +
+                               CalendarService.Describe(_before, _repeat, _repeatAt, _extra);
+
+        ExtraDayLabel.Text = DayName(_extraDay);
+        ExtraAdd.IsEnabled = TryParseTime(ExtraTime.Text, out var et) && _extraDay.Date + et > DateTime.Now && (due == null || _extraDay.Date + et < due);
+    }
+
+    // ---- reminders ----
+
+    void BuildReminderChips()
+    {
+        foreach (var (label, minutes) in new[] { ("1 week", 10080), ("1 day", 1440), ("2 hours", 120), ("30 min", 30), ("When due", 0) })
+        {
+            var chip = Chip(label);
+            chip.IsChecked = _before.Contains(minutes);
+            chip.Click += (_, _) =>
+            {
+                if (chip.IsChecked == true) _before.Add(minutes);
+                else _before.Remove(minutes);
+                UpdatePreview();
+            };
+            BeforeChips.Children.Add(chip);
+        }
+
+        foreach (var (label, value) in new[] { ("Off", "none"), ("Daily", "daily"), ("Weekly", "weekly") })
+        {
+            var chip = Chip(label);
+            chip.IsChecked = value == _repeat;
+            chip.Click += (_, _) =>
+            {
+                _repeat = value;
+                foreach (var c in RepeatChips.Children)
+                    if (c is ToggleButton t) t.IsChecked = ReferenceEquals(t, chip);
+                RepeatTimeRow.Visibility = value == "none" ? Visibility.Collapsed : Visibility.Visible;
+                UpdatePreview();
+            };
+            RepeatChips.Children.Insert(RepeatChips.Children.Count - 1, chip);
+        }
+    }
+
+    void ExtraPrev_Click(object s, RoutedEventArgs e)
+    {
+        if (_extraDay > DateTime.Today) _extraDay = _extraDay.AddDays(-1);
+        UpdatePreview();
+    }
+
+    void ExtraNext_Click(object s, RoutedEventArgs e)
+    {
+        _extraDay = _extraDay.AddDays(1);
+        UpdatePreview();
+    }
+
+    void ExtraAdd_Click(object s, RoutedEventArgs e)
+    {
+        if (!TryParseTime(ExtraTime.Text, out var t)) return;
+        var at = _extraDay.Date + t;
+        if (!_extra.Contains(at)) _extra.Add(at);
+        RefreshExtraChips();
+        UpdatePreview();
+    }
+
+    void RefreshExtraChips()
+    {
+        ExtraDates.Children.Clear();
+        foreach (var at in _extra.OrderBy(d => d).ToList())
+        {
+            var chip = new Button
+            {
+                Style = (Style)FindResource("Btn"),
+                Padding = new Thickness(10, 4, 8, 4),
+                Margin = new Thickness(0, 0, 6, 6),
+                ToolTip = "Remove",
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children =
+                    {
+                        new TextBlock { Text = DayName(at) + at.ToString(" · h:mm tt", CultureInfo.InvariantCulture), FontSize = 12 },
+                        new TextBlock { Text = "\uE711", FontFamily = (FontFamily)FindResource("IconFont"), FontSize = 9, Margin = new Thickness(8, 1, 0, 0), Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center },
+                    },
+                },
+            };
+            chip.Click += (_, _) =>
+            {
+                _extra.Remove(at);
+                RefreshExtraChips();
+                UpdatePreview();
+            };
+            ExtraDates.Children.Add(chip);
+        }
+    }
+
+    void ResetReminders()
+    {
+        _before.Clear();
+        foreach (var m in DefaultBefore) _before.Add(m);
+        int i = 0;
+        int[] order = { 10080, 1440, 120, 30, 0 };
+        foreach (ToggleButton c in BeforeChips.Children) c.IsChecked = _before.Contains(order[i++]);
+        _repeat = "none";
+        foreach (var c in RepeatChips.Children)
+            if (c is ToggleButton t) t.IsChecked = (string)t.Content == "Off";
+        RepeatTimeRow.Visibility = Visibility.Collapsed;
+        RepeatTime.Text = "";
+        _repeatAt = new TimeSpan(9, 0, 0);
+        _extra.Clear();
+        ExtraTime.Text = "";
+        RefreshExtraChips();
+    }
+
+    void Add_Click(object sender, RoutedEventArgs e)
+    {
+        if (DraftDue is not DateTime due || NewTitle.Text.Trim().Length == 0) return;
+        S.ManualDeadlines.Add(new ManualDeadline
+        {
+            Title = NewTitle.Text.Trim(),
+            Due = due,
+            RemindBeforeMinutes = _before.OrderByDescending(m => m).ToList(),
+            Repeat = _repeat,
+            RepeatAt = _repeatAt,
+            RemindOn = _extra.Where(d => d < due).OrderBy(d => d).ToList(),
+            Created = DateTime.Now,
+        });
+        SettingsStore.Save();
+        NewTitle.Text = "";
+        CustomTime.Text = "";
+        _day = null;
+        _time = null;
+        UncheckAll(DayChips);
+        UncheckAll(TimeChips);
+        ResetReminders();
+        RefreshDeadlines();
+        UpdatePreview();
+        _app.Island?.ShowMessage("\uE73E", "Good", "Deadline added", 200, 1600);
+    }
+
+    // ---- reminders sync (Supabase) ----
+
+    void RefreshSync()
+    {
+        bool url = S.SupabaseUrl.Trim().Length > 0, key = S.SupabaseKey.Trim().Length > 0;
+        bool bad = _app.Reminders.SyncStatus.StartsWith("Supabase said") || _app.Reminders.SyncStatus.StartsWith("Couldn't");
+        SyncDot.Fill = !(url && key) ? new SolidColorBrush(Color.FromRgb(0x63, 0x63, 0x66)) : ThemeService.Brush(bad ? "Bad" : "Good");
+        SyncBtn.Content = url && key ? "Remove" : url ? "Paste key" : "Paste URL";
+        SyncTitle.Text = url && key ? (bad ? "Reminders sync not working" : "Reminders sync with your iPhone") : "Reminders not on your iPhone yet";
+        SyncSub.Text = url && key ? (_app.Reminders.SyncStatus.Length > 0 ? _app.Reminders.SyncStatus : "Checking…")
+            : url ? "Now copy the anon (publishable) key from Supabase → Project Settings → API Keys, then press Paste key."
+            : "Make a free project at supabase.com, run the SQL from the README, copy the Project URL, then press Paste URL.";
+    }
+
+    async void Sync_Click(object sender, RoutedEventArgs e)
+    {
+        if (S.SupabaseUrl.Trim().Length > 0 && S.SupabaseKey.Trim().Length > 0)
+        {
+            S.SupabaseUrl = S.SupabaseKey = "";
+            SettingsStore.Save();
+            RefreshSync();
+            return;
+        }
+        string text = "";
+        try { text = Clipboard.GetText().Trim(); } catch { }
+        if (text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && text.Contains("supabase", StringComparison.OrdinalIgnoreCase)) S.SupabaseUrl = text;
+        else if (S.SupabaseUrl.Length > 0 && text.Length > 20 && !text.Contains(' ')) S.SupabaseKey = text;
+        else
+        {
+            SyncTitle.Text = S.SupabaseUrl.Length > 0 ? "Copy the key first" : "Copy the Project URL first";
+            SyncDot.Fill = ThemeService.Brush("Orange");
+            return;
+        }
+        SettingsStore.Save();
+        if (S.SupabaseKey.Length > 0) await _app.Reminders.SyncAsync();
+        RefreshSync();
+    }
+
+    // ---- calendar link ----
+
+    void RefreshCalendar()
+    {
+        bool hasLink = S.CalendarUrl.Trim().Length > 0;
+        bool ok = hasLink && _app.Calendar.Status.StartsWith("Connected");
+        CalDot.Fill = !hasLink ? new SolidColorBrush(Color.FromRgb(0x63, 0x63, 0x66)) : ThemeService.Brush(ok ? "Good" : "Bad");
+        CalBtn.Content = hasLink ? "Remove" : "Paste link";
+        CalTitle.Text = !hasLink ? "No calendar connected" : ok ? "Google Calendar connected" : "Calendar link not working";
+        CalSub.Text = !hasLink
+            ? "In Google Calendar: Settings → your calendar → Integrate calendar → copy \"Secret address in iCal format\", then press Paste link."
+            : _app.Calendar.Status + (ok ? " Classes remind you 1 hour and 10 min before." : "");
+    }
+
+    async void Calendar_Click(object sender, RoutedEventArgs e)
+    {
+        if (S.CalendarUrl.Trim().Length > 0)
+        {
+            S.CalendarUrl = "";
+            SettingsStore.Save();
+            await _app.Calendar.RefreshAsync();
+            RefreshCalendar();
+            RefreshDeadlines();
+            return;
+        }
+
+        string text = "";
+        try { text = Clipboard.GetText().Trim(); } catch { }
+        bool looksRight = (text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase))
+                          && (text.Contains("ical", StringComparison.OrdinalIgnoreCase) || text.Contains(".ics", StringComparison.OrdinalIgnoreCase));
+        if (!looksRight)
+        {
+            CalTitle.Text = "Copy the link first";
+            CalSub.Text = "Your clipboard doesn't have a calendar link. Copy the \"Secret address in iCal format\" from Google Calendar, then press Paste link again.";
+            CalDot.Fill = ThemeService.Brush("Orange");
+            return;
+        }
+
+        S.CalendarUrl = text;
+        SettingsStore.Save();
+        CalTitle.Text = "Checking the link…";
+        CalSub.Text = "";
+        CalBtn.IsEnabled = false;
+        await _app.Calendar.RefreshAsync();
+        CalBtn.IsEnabled = true;
+        RefreshCalendar();
+        RefreshDeadlines();
+    }
+
+    // ================= feature tiles =================
+
+    sealed record TileDef(string Name, string Glyph, Color Color, Func<bool> Get, Action<bool> Set);
+
+    static readonly TileDef[] TileDefs =
+    {
+        new("Now playing", "\uE8D6", Color.FromRgb(0xFF, 0x37, 0x5F), () => S.Features.Media, v => S.Features.Media = v),
+        new("Volume", "\uE767", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Volume, v => S.Features.Volume = v),
+        new("Brightness", "\uE706", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Brightness, v => S.Features.Brightness = v),
+        new("Battery", "\uE83F", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Battery, v => S.Features.Battery = v),
+        new("Downloads", "\uE896", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Downloads, v => S.Features.Downloads = v),
+        new("Clipboard", "\uE77F", Color.FromRgb(0x5E, 0x5C, 0xE6), () => S.Features.Clipboard, v => S.Features.Clipboard = v),
+        new("Earbuds", "\uE7F6", Color.FromRgb(0x64, 0xD2, 0xFF), () => S.Features.Earbuds, v => S.Features.Earbuds = v),
+        new("Calls & camera", "\uE717", Color.FromRgb(0x30, 0xD1, 0x58), () => S.Features.Calls, v => { S.Features.Calls = v; S.Features.Privacy = v; }),
+        new("Deadlines", "\uE787", Color.FromRgb(0xFF, 0x45, 0x3A), () => S.Features.Deadlines, v => S.Features.Deadlines = v),
+        new("Windows Clock", "\uE916", Color.FromRgb(0xFF, 0x9F, 0x0A), () => S.Features.Clock, v => S.Features.Clock = v),
+        new("File transfers", "\uE72D", Color.FromRgb(0x0A, 0x84, 0xFF), () => S.Features.Transfers, v => S.Features.Transfers = v),
+        new("Focus timer", "\uE708", Color.FromRgb(0xBF, 0x5A, 0xF2), () => S.Features.FocusTimer, v => S.Features.FocusTimer = v),
+        new("Claude Code", "\uE99A", Color.FromRgb(0xD9, 0x77, 0x57), () => S.Features.ClaudeCode, v => S.Features.ClaudeCode = v),
+        new("Notifications", "\uEA8F", Color.FromRgb(0xFF, 0x45, 0x3A), () => S.Features.Notifications, v => S.Features.Notifications = v),
+    };
+
+    void BuildTiles()
+    {
+        foreach (var def in TileDefs)
+        {
+            var circle = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(16), VerticalAlignment = VerticalAlignment.Center };
+            circle.Child = new TextBlock { Text = def.Glyph, Style = (Style)FindResource("Icon"), FontSize = 15, Foreground = Brushes.White };
+            var name = new TextBlock { Text = def.Name, FontWeight = FontWeights.SemiBold, FontSize = 13 };
+            var state = new TextBlock { Style = (Style)FindResource("Sub") };
+            var text = new StackPanel { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(name);
+            text.Children.Add(state);
+            var content = new DockPanel();
+            DockPanel.SetDock(circle, Dock.Left);
+            content.Children.Add(circle);
+            content.Children.Add(text);
+
+            var tile = new Border
+            {
+                Background = ThemeService.Brush("Card"), CornerRadius = new CornerRadius(16), Padding = new Thickness(11, 10, 11, 10),
+                Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand, Child = content, MinHeight = 56,
+                Tag = (def, circle, state),
+            };
+            tile.MouseEnter += (_, _) => tile.Background = ThemeService.Brush("CardHover");
+            tile.MouseLeave += (_, _) => tile.Background = ThemeService.Brush("Card");
+            tile.MouseLeftButtonUp += (_, _) =>
+            {
+                def.Set(!def.Get());
+                SettingsStore.Save();
+                RefreshTiles();
+                RefreshFocus();
+            };
+            Tiles.Children.Add(tile);
+        }
+        Tiles.Margin = new Thickness(0, 0, -8, -8); // tiles carry their own right/bottom gap
+    }
+
+    void RefreshTiles()
+    {
+        foreach (Border tile in Tiles.Children)
+        {
+            var (def, circle, state) = ((TileDef, Border, TextBlock))tile.Tag;
+            bool on = def.Get();
+            circle.Background = on ? ThemeService.Solid(def.Color) : ThemeService.Brush("ChipOn");
+            state.Text = on ? "On" : "Off";
+        }
+    }
+
+    // ================= position =================
+
+    void BuildPositions()
+    {
+        foreach (var pos in new[] { "left", "center", "right" })
+        {
+            var screen = new Border { Width = 44, Height = 14, CornerRadius = new CornerRadius(3), Background = ThemeService.Brush("Chip") };
+            screen.Child = new Border
+            {
+                Width = 14, Height = 5, CornerRadius = new CornerRadius(2.5), Background = Brushes.White, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(3, 2, 3, 0),
+                HorizontalAlignment = pos == "left" ? HorizontalAlignment.Left : pos == "right" ? HorizontalAlignment.Right : HorizontalAlignment.Center,
+            };
+            var stack = new StackPanel();
+            stack.Children.Add(screen);
+            stack.Children.Add(new TextBlock { Text = char.ToUpper(pos[0]) + pos[1..], HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 0), FontWeight = FontWeights.SemiBold, FontSize = 12.5 });
+            var btn = new Button { Style = (Style)FindResource("Btn"), Content = stack, Tag = pos, Padding = new Thickness(0, 8, 0, 7), Margin = new Thickness(1.5, 0, 1.5, 0) };
+            btn.Click += (_, _) =>
+            {
+                S.Position = pos;
+                SettingsStore.Save();
+                RefreshPositions();
+                Close(); // the island moved; reopen under it from the tray if needed
+            };
+            PosButtons.Children.Add(btn);
+        }
+    }
+
+    void RefreshPositions()
+    {
+        foreach (Button b in PosButtons.Children)
+            b.Background = (string)b.Tag == S.Position ? ThemeService.Brush("ChipOn") : Brushes.Transparent;
+    }
+
+    // ================= options =================
+
+    void BuildOptions()
+    {
+        AddOption("Replace the Windows volume pop-up", "Only the island shows when you press the volume keys.",
+            () => S.HideWindowsVolumePopup, v => S.HideWindowsVolumePopup = v);
+        AddOption("Show copied text", "Off: just says \"Copied\". Passwords are never shown.",
+            () => S.ClipboardShowText, v => S.ClipboardShowText = v);
+        AddOption("Hide in full-screen", "Games and videos stay clean. Volume still shows.",
+            () => S.HideInFullscreen, v => S.HideInFullscreen = v);
+        AddOption("Album colour glow", "Light in the colour of the song's cover, spilling out from under the island.",
+            () => S.AlbumGlow, v => S.AlbumGlow = v);
+        AddOption("Face when idle", "Two little eyes on the island when nothing else is on. Click it (or Win + Shift + H) for Home.",
+            () => S.IdleFace, v => S.IdleFace = v);
+        AddClaudeOption();
+
+        AddShortcutOption();
+
+        AddOption("Listen for \u201CJarvis\u201D", "Say \u201CJarvis, open Spotify\u201D without pressing anything. Keeps the microphone on, also during calls.",
+            () => S.JarvisWakeWord, v => S.JarvisWakeWord = v);
+        AddOption("Jarvis sounds", "A soft chime when it listens and when it's done.",
+            () => S.JarvisSounds, v => S.JarvisSounds = v);
+        AddJarvisKeyOption();
+        AddBrainOption();
+        AddOption("Sharper hearing", "With your Groq key: what you say to Jarvis is turned into text by Groq's Whisper, far more accurately. Only commands are sent, never what it hears before \u201CJarvis\u201D. Also uses less memory.",
+            () => S.CloudSpeech, v => S.CloudSpeech = v);
+
+        var startup = AddOption("Start with Windows", null, () => false, _ => { });
+        startup.IsEnabled = false;
+        _ = LoadStartupAsync(startup);
+    }
+
+    async Task LoadStartupAsync(ToggleButton sw)
+    {
+        sw.IsChecked = await StartupService.IsEnabledAsync();
+        sw.IsEnabled = true;
+        sw.Click += async (_, _) =>
+        {
+            var message = await StartupService.SetAsync(sw.IsChecked == true);
+            if (message != null)
+            {
+                sw.IsChecked = false;
+                _app.Island?.ShowMessage("\uE7BA", "Orange", message, 420, 5000);
+            }
+        };
+    }
+
+    /// <summary>Record your Discord mute shortcut: click the button, then press the keys.</summary>
+    void AddShortcutOption()
+    {
+        var btn = new Button { Style = (Style)FindResource("Btn"), Content = ShortcutText(), VerticalAlignment = VerticalAlignment.Center, MinWidth = 90 };
+        bool listening = false;
+        btn.Click += (_, _) =>
+        {
+            listening = true;
+            btn.Content = "Press keys…";
+            btn.Focus();
+        };
+        btn.PreviewKeyDown += (_, e) =>
+        {
+            if (!listening) return;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            // Right Ctrl / Right Alt on their own are common Discord mute keys.
+            if (key is Key.RightCtrl or Key.RightAlt)
+            {
+                e.Handled = true;
+                listening = false;
+                S.DiscordMuteKey = KeyInterop.VirtualKeyFromKey(key);
+                S.DiscordMuteModifiers = 0;
+                SettingsStore.Save();
+                btn.Content = ShortcutText();
+                return;
+            }
+            if (key is Key.LeftCtrl or Key.LeftAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+            e.Handled = true;
+            listening = false;
+            if (key is Key.Escape or Key.Back or Key.Delete)
+            {
+                S.DiscordMuteKey = 0;
+                S.DiscordMuteModifiers = 0;
+            }
+            else
+            {
+                S.DiscordMuteKey = KeyInterop.VirtualKeyFromKey(key);
+                S.DiscordMuteModifiers = Native.Win32.CurrentModifiers();
+            }
+            SettingsStore.Save();
+            btn.Content = ShortcutText();
+        };
+        btn.LostFocus += (_, _) => { if (listening) { listening = false; btn.Content = ShortcutText(); } };
+
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Discord mute shortcut", FontSize = 13.5 });
+        text.Children.Add(new TextBlock { Text = "Same keys as in Discord. The island shows when you're muted. Backspace clears it.", Style = (Style)FindResource("Sub") });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(btn, Dock.Right);
+        row.Children.Add(btn);
+        row.Children.Add(text);
+        Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    /// <summary>Record the key you hold to talk to Jarvis. Escape puts back Ctrl + Space.</summary>
+    void AddJarvisKeyOption()
+    {
+        var btn = new Button { Style = (Style)FindResource("Btn"), Content = KeyText(S.JarvisKey, S.JarvisMods), VerticalAlignment = VerticalAlignment.Center, MinWidth = 90 };
+        bool listening = false;
+        btn.Click += (_, _) => { listening = true; btn.Content = "Press keys…"; btn.Focus(); };
+        btn.PreviewKeyDown += (_, e) =>
+        {
+            if (!listening) return;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            e.Handled = true;
+            // Right Alt or Right Ctrl on their own make good talk keys.
+            if (key is Key.RightAlt or Key.RightCtrl)
+            {
+                S.JarvisKey = KeyInterop.VirtualKeyFromKey(key);
+                S.JarvisMods = 0;
+            }
+            else if (key is Key.LeftCtrl or Key.LeftAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+            {
+                e.Handled = false;
+                return; // wait for the main key
+            }
+            else if (key == Key.Escape)
+            {
+                S.JarvisKey = 0x20;
+                S.JarvisMods = Native.Win32.MOD_KEY_CTRL;
+            }
+            else
+            {
+                int mods = Native.Win32.CurrentModifiers();
+                int vk = KeyInterop.VirtualKeyFromKey(key);
+                bool fKey = vk is >= 0x70 and <= 0x87;
+                if (mods == 0 && !fKey)
+                {
+                    btn.Content = "Add Ctrl or Alt";
+                    return; // a plain letter or Space alone would stop you typing it
+                }
+                S.JarvisKey = vk;
+                S.JarvisMods = mods;
+            }
+            listening = false;
+            SettingsStore.Save();
+            btn.Content = KeyText(S.JarvisKey, S.JarvisMods);
+        };
+        btn.LostFocus += (_, _) => { if (listening) { listening = false; btn.Content = KeyText(S.JarvisKey, S.JarvisMods); } };
+
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Jarvis key", FontSize = 13.5 });
+        text.Children.Add(new TextBlock { Text = "Hold it and talk. Ctrl + Space blocks VS Code's autocomplete; Right Alt is a good swap. Escape resets.", Style = (Style)FindResource("Sub"), TextWrapping = TextWrapping.Wrap });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(btn, Dock.Right);
+        row.Children.Add(btn);
+        row.Children.Add(text);
+        Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    static string KeyText(int vk, int m)
+    {
+        var parts = new List<string>();
+        if ((m & Native.Win32.MOD_KEY_CTRL) != 0) parts.Add("Ctrl");
+        if ((m & Native.Win32.MOD_KEY_ALT) != 0) parts.Add("Alt");
+        if ((m & Native.Win32.MOD_KEY_SHIFT) != 0) parts.Add("Shift");
+        if ((m & Native.Win32.MOD_KEY_WIN) != 0) parts.Add("Win");
+        parts.Add(vk switch { 0x20 => "Space", 0xA5 => "Right Alt", 0xA3 => "Right Ctrl", _ => KeyInterop.KeyFromVirtualKey(vk).ToString() });
+        return string.Join(" + ", parts);
+    }
+
+    static string ShortcutText() => S.DiscordMuteKey == 0 ? "Set" : KeyText(S.DiscordMuteKey, S.DiscordMuteModifiers);
+
+    /// <summary>
+    /// The optional AI brain: paste a free Groq key. Jarvis only asks it when its own rules
+    /// don't understand you, and to answer questions.
+    /// </summary>
+    void AddBrainOption()
+    {
+        var sw = AddOption("AI brain (Groq, free)",
+            "When Jarvis doesn\u2019t understand, or you ask a question, it asks Groq. Only those phrases leave your laptop. Free key: console.groq.com/keys",
+            () => S.BrainEnabled, v => S.BrainEnabled = v);
+
+        var box = new TextBox { Style = (Style)FindResource("Field"), Tag = Brain.Masked() is { Length: > 0 } m ? $"Saved key {m} \u00B7 paste a new one to replace" : "Paste your Groq key (gsk_\u2026)" };
+        var save = new Button { Style = (Style)FindResource("BlueBtn"), Content = "Save", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var remove = new Button { Style = (Style)FindResource("Btn"), Content = "Remove", Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Brain.Key().Length > 0 ? Visibility.Visible : Visibility.Collapsed };
+        var status = new TextBlock { Style = (Style)FindResource("Sub"), Margin = new Thickness(2, 6, 0, 0), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        void Status(string text, bool bad)
+        {
+            status.Text = text;
+            status.Foreground = bad ? ThemeService.Brush("Orange") : ThemeService.Brush("Good");
+            status.Visibility = Visibility.Visible;
+        }
+        save.Click += async (_, _) =>
+        {
+            var key = box.Text.Trim();
+            if (!key.StartsWith("gsk_") || key.Length < 20) { Status("That doesn\u2019t look like a Groq key. They start with gsk_", true); return; }
+            Brain.SaveKey(key);
+            box.Text = "";
+            save.IsEnabled = false;
+            Status("Checking the key\u2026", false);
+            var err = await Brain.TestAsync();
+            save.IsEnabled = true;
+            box.Tag = $"Saved key {Brain.Masked()} \u00B7 paste a new one to replace";
+            remove.Visibility = Visibility.Visible;
+            if (err == null) { Status("Works. Try \u201CJarvis, what\u2019s 1 dollar in rupees?\u201D", false); sw.IsChecked = S.BrainEnabled = true; SettingsStore.Save(); }
+            else Status(err, true);
+        };
+        remove.Click += (_, _) =>
+        {
+            Brain.SaveKey("");
+            box.Tag = "Paste your Groq key (gsk_\u2026)";
+            remove.Visibility = Visibility.Collapsed;
+            Status("Key removed. Jarvis is rules-only again.", false);
+        };
+
+        var line = new DockPanel();
+        DockPanel.SetDock(remove, Dock.Right);
+        DockPanel.SetDock(save, Dock.Right);
+        line.Children.Add(remove);
+        line.Children.Add(save);
+        line.Children.Add(box);
+        var panel = new StackPanel { Margin = new Thickness(14, 0, 14, 12) };
+        panel.Children.Add(line);
+        panel.Children.Add(status);
+        Options.Children.Add(panel);
+    }
+
+    /// <summary>Claude Code on the island: adds or removes DyIsd's hooks in Claude Code's settings.</summary>
+    void AddClaudeOption()
+    {
+        var btn = new Button { Style = (Style)FindResource("Btn"), VerticalAlignment = VerticalAlignment.Center, MinWidth = 96 };
+        void Refresh() => btn.Content = _app.Claude.State.Connected ? "Disconnect" : "Connect";
+        Refresh();
+        btn.Click += (_, _) =>
+        {
+            if (_app.Claude.State.Connected) _app.Claude.Disconnect(); else _app.Claude.Connect();
+            Refresh();
+        };
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = "Claude Code status", FontSize = 13.5 });
+        text.Children.Add(new TextBlock
+        {
+            Text = "Thinking, Editing, Done on the island while Claude Code works. Connect adds a small hook to Claude Code's settings (new sessions pick it up).",
+            Style = (Style)FindResource("Sub"),
+        });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(btn, Dock.Right);
+        row.Children.Add(btn);
+        row.Children.Add(text);
+        Options.Children.Add(new Border { Child = row, BorderBrush = ThemeService.Brush("Chip"), BorderThickness = new Thickness(0, 1, 0, 0) });
+    }
+
+    ToggleButton AddOption(string title, string? help, Func<bool> get, Action<bool> set)
+    {
+        var sw = new ToggleButton { Style = (Style)FindResource("Switch"), IsChecked = get(), VerticalAlignment = VerticalAlignment.Center };
+        if (title != "Start with Windows")
+        {
+            sw.Click += (_, _) =>
+            {
+                set(sw.IsChecked == true);
+                SettingsStore.Save();
+            };
+        }
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        text.Children.Add(new TextBlock { Text = title, FontSize = 13.5 });
+        if (help != null) text.Children.Add(new TextBlock { Text = help, Style = (Style)FindResource("Sub") });
+        var row = new DockPanel { Margin = new Thickness(14, 11, 14, 11) };
+        DockPanel.SetDock(sw, Dock.Right);
+        row.Children.Add(sw);
+        row.Children.Add(text);
+        Options.Children.Add(new Border
+        {
+            Child = row,
+            BorderBrush = ThemeService.Brush("Chip"),
+            BorderThickness = new Thickness(0, Options.Children.Count == 0 ? 0 : 1, 0, 0),
+        });
+        return sw;
+    }
+
+    // ================= footer =================
+
+    void Pause_Click(object sender, RoutedEventArgs e)
+    {
+        _app.IslandPaused = !_app.IslandPaused;
+        PauseBtn.Content = _app.IslandPaused ? "Resume island" : "Pause island";
+    }
+
+    void Quit_Click(object sender, RoutedEventArgs e) => _app.Quit();
+
+    void Logs_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{Log.RealDir}\"")); }
+        catch (Exception ex) { Log.Error("open logs", ex); }
+        Close();
+    }
+
+    void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    // ================= helpers =================
+
+    ToggleButton Chip(string text) => new() { Style = (Style)FindResource("ChipToggle"), Content = text };
+
+    static void UncheckAll(Panel panel)
+    {
+        foreach (var c in panel.Children)
+            if (c is ToggleButton t) t.IsChecked = false;
+    }
+}

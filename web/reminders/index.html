@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reminders">
+<meta name="theme-color" content="#000000">
+<title>Reminders</title>
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  :root {
+    --bg:#000; --card:#1c1c1e; --card2:#2c2c2e; --fg:#fff;
+    --mute:rgba(235,235,245,.6); --mute2:rgba(235,235,245,.3); --sep:rgba(84,84,88,.55);
+    --green:#30d158; --red:#ff453a; --orange:#ff9f0a; --blue:#0a84ff;
+    --glass:rgba(28,28,30,.72);
+    --ios:cubic-bezier(.32,.72,0,1);
+    --top:env(safe-area-inset-top); --bot:env(safe-area-inset-bottom);
+    color-scheme:dark;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { background:var(--bg); }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.35 -apple-system, "SF Pro Text", system-ui, sans-serif;
+         -webkit-font-smoothing:antialiased; -webkit-user-select:none; user-select:none; overscroll-behavior-y:none; }
+  button { font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+  input { -webkit-user-select:text; user-select:text; }
+
+  /* ---------- splash: the island grows into the app ---------- */
+  #splash { position:fixed; inset:0; z-index:50; background:#000; display:grid; }
+  #splash .pill { position:absolute; left:50%; top:calc(var(--top) + 11px); width:126px; height:37px; margin-left:-63px;
+                  border-radius:19px; background:#000; overflow:hidden; display:grid; place-items:center;
+                  box-shadow:0 0 0 1px rgba(255,255,255,.06); }
+  #splash .glow { position:absolute; inset:0; opacity:0; background:linear-gradient(170deg,#0A1A14,#0F4A33 50%,#30D158); }
+  #splash svg { position:relative; width:56px; height:56px; opacity:0; transform:scale(.4); }
+  #splash .word { position:absolute; left:0; right:0; top:58%; text-align:center; font:700 28px/1 -apple-system, system-ui;
+                  letter-spacing:-.02em; opacity:0; }
+
+  /* ---------- app ---------- */
+  #app { padding:calc(var(--top) + 8px) 16px calc(var(--bot) + 110px); }
+  .bar { position:fixed; z-index:10; left:0; right:0; top:0; height:calc(var(--top) + 44px); padding-top:var(--top);
+         display:grid; place-items:center; font-weight:600; font-size:17px; letter-spacing:-.01em;
+         background:var(--glass); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+         border-bottom:.5px solid var(--sep); opacity:0; pointer-events:none; transition:opacity .2s; }
+  .bar.on { opacity:1; }
+  h1 { font-size:34px; line-height:1.1; letter-spacing:-.022em; font-weight:700; margin:44px 4px 12px; }
+
+  .hero { position:relative; border-radius:24px; padding:16px 18px 18px; overflow:hidden; margin-bottom:26px;
+          background:linear-gradient(170deg,#0A1A14,#0F4A33 52%,#30D158); box-shadow:0 10px 30px -12px rgba(48,209,88,.45); }
+  .hero .lab { font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.7); }
+  .hero .big { font-size:40px; line-height:1.05; font-weight:700; letter-spacing:-.025em; margin-top:22px; font-variant-numeric:tabular-nums; }
+  .hero .sub { font-size:15px; color:rgba(255,255,255,.8); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:calc(100% - 70px); }
+  .hero .ring { position:absolute; right:16px; top:16px; width:54px; height:54px; }
+  .hero .ring circle { fill:none; stroke-width:6; stroke-linecap:round; }
+  .hero .ring .track { stroke:rgba(255,255,255,.18); }
+  .hero .ring .fill { stroke:#fff; transform:rotate(-90deg); transform-origin:center; transition:stroke-dashoffset .8s var(--ios); }
+
+  h2 { display:flex; align-items:baseline; gap:8px; font-size:20px; font-weight:700; letter-spacing:-.015em; margin:0 4px 8px; }
+  h2 span { font-size:15px; font-weight:600; color:var(--mute); font-variant-numeric:tabular-nums; }
+  h2.today { color:var(--fg); } h2.later { color:var(--fg); } h2.done { color:var(--mute); }
+  ul { list-style:none; margin:0 0 26px; padding:0; background:var(--card); border-radius:14px; overflow:hidden; }
+
+  li { position:relative; overflow:hidden; transition:height .3s var(--ios), opacity .3s; }
+  li .act { position:absolute; inset:0; display:flex; align-items:center; padding:0 22px; font-weight:600; font-size:15px; opacity:0; }
+  li .act.yes { background:var(--green); color:#000; }
+  li .act.no  { background:var(--red); justify-content:flex-end; }
+  li .row { position:relative; display:flex; align-items:center; gap:12px; padding:11px 14px 11px 14px; background:var(--card);
+            touch-action:pan-y; will-change:transform; }
+  li + li .row::before { content:""; position:absolute; top:0; left:50px; right:0; border-top:.5px solid var(--sep); }
+  li .row:active { background:#232325; }
+
+  .tick { flex:none; width:26px; height:26px; display:grid; place-items:center; }
+  .tick svg { width:26px; height:26px; overflow:visible; }
+  .tick circle { fill:transparent; stroke:var(--mute2); stroke-width:1.6; transition:fill .25s, stroke .25s; }
+  .tick path { fill:none; stroke:#000; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; stroke-dasharray:16; stroke-dashoffset:16; }
+  .tick:active svg { transform:scale(.88); }
+  li.done .tick circle, li.ticking .tick circle { fill:var(--green); stroke:var(--green); }
+  li.done .tick path { stroke-dashoffset:0; }
+  li.ticking .tick svg { animation:pop .45s cubic-bezier(.34,1.56,.64,1); }
+  li.ticking .tick path { transition:stroke-dashoffset .3s .08s ease-out; stroke-dashoffset:0; }
+  @keyframes pop { 0% { transform:scale(.7) } 100% { transform:scale(1) } }
+
+  .txt { flex:1; min-width:0; }
+  .t { position:relative; display:inline; overflow-wrap:anywhere; -webkit-user-select:none; }
+  .t::after { content:""; position:absolute; left:0; top:55%; height:1.5px; width:100%; background:currentColor; transform:scaleX(0); transform-origin:left; }
+  li.done .t { color:var(--mute); } li.done .t::after { transform:scaleX(1); }
+  li.ticking .t::after { transform:scaleX(1); transition:transform .35s .1s var(--ios); }
+  li.ticking .t { color:var(--mute); transition:color .3s .15s; }
+  .w { font-size:13px; color:var(--mute); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .w.late { color:var(--red); } .w.soon { color:var(--orange); }
+
+  .empty { text-align:center; color:var(--mute); padding:28px 0 10px; font-size:15px; }
+  #status { text-align:center; color:var(--mute2); font-size:12px; margin-top:4px; }
+  #status.bad { color:var(--red); }
+
+  /* ---------- floating add button ---------- */
+  #fab { position:fixed; z-index:9; left:50%; bottom:calc(var(--bot) + 18px); transform:translateX(-50%);
+         display:flex; align-items:center; gap:8px; padding:14px 22px; white-space:nowrap; border-radius:999px; font-weight:600; font-size:17px; color:var(--green);
+         background:var(--glass); -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+         box-shadow:0 8px 30px rgba(0,0,0,.5), inset 0 .5px 0 rgba(255,255,255,.15); transition:transform .15s; }
+  #fab:active { transform:translateX(-50%) scale(.95); }
+  #fab b { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--green); color:#000; font-size:20px; line-height:1; }
+
+  /* ---------- add sheet ---------- */
+  #scrim { position:fixed; inset:0; z-index:20; background:rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .35s; }
+  #scrim.on { opacity:1; pointer-events:auto; }
+  #sheet { position:fixed; z-index:21; left:0; right:0; bottom:0; padding:8px 16px calc(var(--bot) + 16px);
+           background:rgba(36,36,38,.92); -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+           border-radius:22px 22px 0 0; box-shadow:0 -10px 40px rgba(0,0,0,.4), inset 0 .5px 0 rgba(255,255,255,.12);
+           transform:translateY(105%); transition:transform .5s var(--ios); }
+  #sheet.on { transform:translateY(0); }
+  #sheet .grab { width:36px; height:5px; border-radius:3px; background:rgba(255,255,255,.25); margin:0 auto 10px; }
+  #sheet .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; touch-action:none; }
+  #sheet .top b { font-weight:600; }
+  #sheet .top button { color:var(--green); font-size:17px; padding:6px 2px; }
+  #sheet .top .add { font-weight:600; } #sheet .top .add:disabled { color:var(--mute2); }
+  #newText { width:100%; font:inherit; font-size:20px; color:var(--fg); background:var(--card2); border:0; border-radius:12px; padding:14px; outline:none; }
+  #newText::placeholder { color:var(--mute2); }
+  .chips { display:flex; gap:8px; overflow-x:auto; margin:14px -16px 0; padding:0 16px 2px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:none; padding:9px 14px; border-radius:999px; background:var(--card2); font-size:15px; font-weight:500; white-space:nowrap; transition:background .2s, color .2s; position:relative; }
+  .chip.on { background:var(--green); color:#000; }
+  .chip input { position:absolute; inset:0; opacity:0; width:100%; }
+  #when { font-size:13px; color:var(--mute); margin:12px 2px 0; min-height:18px; }
+
+  /* ---------- toast ---------- */
+  #toast { position:fixed; z-index:30; left:50%; bottom:calc(var(--bot) + 84px); transform:translate(-50%, 20px); opacity:0; pointer-events:none;
+           display:flex; gap:16px; align-items:center; padding:12px 18px; border-radius:16px; font-size:15px; max-width:calc(100% - 32px);
+           background:var(--glass); -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px); box-shadow:0 8px 30px rgba(0,0,0,.5);
+           transition:opacity .25s, transform .35s var(--ios); }
+  #toast.on { opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
+  #toast span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #toast button { color:var(--green); font-weight:600; }
+
+  /* ---------- setup ---------- */
+  #setup { display:none; background:var(--card); border-radius:20px; padding:18px; margin-top:8px; }
+  #setup p { color:var(--mute); font-size:15px; margin:0 0 14px; }
+  #setup label { display:block; font-size:13px; color:var(--mute); margin-bottom:12px; }
+  #setup input { display:block; width:100%; margin-top:6px; font:inherit; color:var(--fg); background:var(--card2); border:0; border-radius:12px; padding:13px; outline:none; }
+  #setup .go { width:100%; margin-top:6px; padding:14px; border-radius:14px; background:var(--green); color:#000; font-weight:600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration:.01s !important; animation-duration:.01s !important; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .bar, #fab, #sheet, #toast { background:#1c1c1e; -webkit-backdrop-filter:none; backdrop-filter:none; }
+  }
+</style>
+</head>
+<body>
+<div id="splash" aria-hidden="true">
+  <div class="pill"><div class="glow"></div>
+    <svg viewBox="0 0 56 56"><circle cx="28" cy="28" r="26" fill="#fff"/><path d="M17 29l7.5 7.5L40 21" fill="none" stroke="#0F4A33" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div class="word">Reminders</div>
+</div>
+
+<div class="bar" id="bar">Reminders</div>
+
+<main id="app">
+  <h1 id="title">Reminders</h1>
+  <section class="hero" id="hero" aria-live="polite">
+    <div class="lab">Today</div>
+    <svg class="ring" viewBox="0 0 54 54" aria-hidden="true"><circle class="track" cx="27" cy="27" r="23"/><circle class="fill" id="ring" cx="27" cy="27" r="23" stroke-dasharray="144.5" stroke-dashoffset="144.5"/></svg>
+    <div class="big" id="big">–</div>
+    <div class="sub" id="sub">&nbsp;</div>
+  </section>
+
+  <div id="setup">
+    <p>Paste the same Supabase details you gave DyIsd on the laptop (Supabase → Project Settings → API keys). They stay on this phone.</p>
+    <label>Project URL<input id="url" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label>Publishable key<input id="key" placeholder="sb_publishable_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <button class="go" onclick="saveSetup()">Connect</button>
+  </div>
+
+  <div id="groups"></div>
+  <div id="status"></div>
+</main>
+
+<button id="fab" onclick="openSheet()"><b>+</b>New Reminder</button>
+
+<div id="scrim" onclick="closeSheet()"></div>
+<div id="sheet" role="dialog" aria-label="New reminder">
+  <div class="grab"></div>
+  <div class="top" id="sheetTop">
+    <button onclick="closeSheet()">Cancel</button>
+    <b>New Reminder</b>
+    <button class="add" id="addBtn" onclick="addNew()" disabled>Add</button>
+  </div>
+  <input id="newText" placeholder="What do you need to do?" enterkeyhint="done" autocomplete="off">
+  <div class="chips" id="chips"></div>
+  <div id="when"></div>
+</div>
+
+<div id="toast"><span id="toastText"></span><button id="toastBtn">Undo</button></div>
+
+<script>
+// Same table as DyIsd on the laptop: id, text, due (UTC), done, done_at, updated (ms), deleted.
+// Newest "updated" wins, so ticking here or on the laptop both stick.
+const $ = id => document.getElementById(id);
+const store = (k, v) => { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const buzz = ms => navigator.vibrate?.(ms);   // Android; iPhone Safari ignores it
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let cfg = read('rem-cfg', {});
+let items = read('rem-cache', []);            // last list, so the app opens instantly
+let dirty = read('rem-dirty', {});            // changes that didn't reach Supabase yet
+let busy = false;                             // a swipe or tick is animating: don't redraw under it
+
+// ---------- Supabase ----------
+function api(path, opts = {}) {
+  return fetch(cfg.url.replace(/\/$/, '') + '/rest/v1/' + path, {
+    ...opts,
+    headers: { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  }).then(async r => { if (!r.ok) throw new Error(r.status + ' ' + await r.text()); return r.status === 204 || r.status === 201 ? null : r.json(); });
+}
+const push = rows => api('reminders?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows) });
+
+function status(msg, bad) { $('status').textContent = msg; $('status').className = bad ? 'bad' : ''; }
+
+async function load() {
+  if (!cfg.url || !cfg.key) { $('setup').style.display = 'block'; $('fab').style.display = 'none'; $('groups').innerHTML = ''; return; }
+  try {
+    const waiting = Object.values(dirty);
+    if (waiting.length) { await push(waiting); dirty = {}; store('rem-dirty', dirty); }
+    const server = await api('reminders?select=*');
+    items = server;
+    store('rem-cache', items);
+    if (!busy) render();
+    status('Synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  } catch (e) { status(navigator.onLine ? "Couldn't sync: " + e.message : 'Offline · changes sync when you’re back', true); }
+}
+
+async function save(r) {
+  r.updated = Date.now();
+  const i = items.findIndex(x => x.id === r.id);
+  if (i >= 0) items[i] = r; else items.push(r);
+  store('rem-cache', items);
+  render();
+  try { await push([r]); delete dirty[r.id]; status('Saved'); }
+  catch { dirty[r.id] = r; status('Saved on this phone · will sync', true); }
+  store('rem-dirty', dirty);
+}
+
+// ---------- time words ----------
+const dayStart = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const clock = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function whenText(due) {
+  const d = new Date(due), diff = Math.round((dayStart(d) - dayStart()) / 864e5);
+  return diff === 0 ? clock(d) : diff === 1 ? 'Tomorrow, ' + clock(d) : diff === -1 ? 'Yesterday, ' + clock(d)
+       : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + clock(d);
+}
+
+// ---------- list ----------
+function render() {
+  const now = new Date(), today = dayStart(), tomorrow = new Date(+today + 864e5);
+  const live = items.filter(r => !r.deleted);
+  const done = live.filter(r => r.done && r.done_at && new Date(r.done_at) >= today).sort((a, b) => new Date(b.done_at) - new Date(a.done_at));
+  const open = live.filter(r => !r.done);
+  const byDue = (a, b) => (a.due ? new Date(a.due) : Infinity) - (b.due ? new Date(b.due) : Infinity) || a.updated - b.updated;
+  const todayList = open.filter(r => !r.due || new Date(r.due) < tomorrow).sort(byDue);
+  const later = open.filter(r => r.due && new Date(r.due) >= tomorrow).sort(byDue);
+
+  // Hero card: what's left today, and a ring for today's progress.
+  const left = todayList.length, total = left + done.length;
+  $('big').textContent = left ? left + ' to do' : (later.length ? 'Clear today' : 'All done');
+  const next = todayList[0] || later[0];
+  $('sub').textContent = next ? next.text + (next.due ? ' · ' + whenText(next.due) : '') : 'Nothing left. Nice.';
+  $('ring').style.strokeDashoffset = 144.5 * (1 - (total ? done.length / total : 1));
+
+  const g = $('groups');
+  g.innerHTML = '';
+  if (!live.length || (!open.length && !done.length)) { g.innerHTML = '<div class="empty">Tap New Reminder, or tell Jarvis.</div>'; return; }
+  section(g, 'Today', 'today', todayList);
+  section(g, 'Later', 'later', later);
+  section(g, 'Done', 'done', done);
+}
+
+function section(parent, title, cls, list) {
+  if (!list.length) return;
+  const h = document.createElement('h2');
+  h.className = cls; h.innerHTML = `${title} <span>${list.length}</span>`;
+  const ul = document.createElement('ul');
+  for (const r of list) ul.append(row(r));
+  parent.append(h, ul);
+}
+
+function row(r) {
+  const li = document.createElement('li');
+  li.dataset.id = r.id;
+  if (r.done) li.className = 'done';
+  li.innerHTML = `<div class="act yes">${r.done ? 'Not done' : 'Done'}</div><div class="act no">Delete</div>
+    <div class="row"><button class="tick" aria-label="${r.done ? 'Mark not done' : 'Mark done'}">
+      <svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="11.5"/><path d="M8 13.4l3.4 3.4L18.2 10"/></svg></button>
+      <div class="txt"><div class="t"></div><div class="w"></div></div></div>`;
+  li.querySelector('.t').textContent = r.text;
+  const w = li.querySelector('.w');
+  if (r.due && !r.done) {
+    const ms = new Date(r.due) - Date.now();
+    w.textContent = (ms < 0 ? 'Overdue · ' : '') + whenText(r.due);
+    w.className = 'w' + (ms < 0 ? ' late' : ms < 36e5 ? ' soon' : '');
+  } else w.remove();
+  li.querySelector('.tick').onclick = e => { e.stopPropagation(); toggle(li, r); };
+  swipe(li, r);
+  return li;
+}
+
+function toggle(li, r) {
+  if (r.done) { save({ ...r, done: false, done_at: null }); return; }
+  busy = true;
+  li.classList.add('ticking');   // ring fills, check draws, line strikes through
+  buzz(12);
+  setTimeout(() => { busy = false; save({ ...r, done: true, done_at: new Date().toISOString() }); }, reduce ? 0 : 650);
+}
+
+// ---------- swipe: right = done, left = delete ----------
+function swipe(li, r) {
+  const el = li.querySelector('.row'), yes = li.querySelector('.yes'), no = li.querySelector('.no');
+  let x0, y0, dx = 0, dir = 0, hist = [], id = null, armed = false;
+  const W = () => li.offsetWidth;
+  const rubber = (o, d) => (o * d * .55) / (d + .55 * Math.abs(o));
+  const set = v => {
+    el.style.transform = `translateX(${v}px)`;
+    yes.style.opacity = v > 0 ? 1 : 0; no.style.opacity = v < 0 ? 1 : 0;
+    const over = Math.abs(v) > W() * .35;
+    if (over !== armed) { armed = over; if (over) buzz(8); }
+  };
+  el.addEventListener('pointerdown', e => { x0 = e.clientX; y0 = e.clientY; dir = 0; dx = 0; hist = [[x0, e.timeStamp]]; id = e.pointerId; el.style.transition = 'none'; });
+  el.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!dir) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      dir = Math.abs(mx) > Math.abs(my) ? 1 : -1;       // decide once: sideways swipe or page scroll
+      if (dir === 1) { el.setPointerCapture(id); busy = true; }
+    }
+    if (dir !== 1) return;
+    const lim = W() * .75;
+    dx = Math.abs(mx) > lim ? Math.sign(mx) * (lim + rubber(Math.abs(mx) - lim, W())) : mx;
+    set(dx);
+    hist.push([e.clientX, e.timeStamp]); if (hist.length > 5) hist.shift();
+  });
+  const end = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (dir !== 1) return;
+    const [a, b] = [hist[0], hist[hist.length - 1]];
+    const v = b[1] > a[1] ? (b[0] - a[0]) / (b[1] - a[1]) * 1000 : 0;   // px/s at release
+    const proj = dx + (v / 1000) * .99 / (1 - .99);                       // where the flick is heading
+    el.style.transition = 'transform .45s cubic-bezier(.2,.9,.25,1)';
+    const w = W();
+    if (proj > w * .4) {
+      set(w); setTimeout(() => { busy = false; r.done ? save({ ...r, done: false, done_at: null }) : save({ ...r, done: true, done_at: new Date().toISOString() }); }, 260);
+    } else if (proj < -w * .4) {
+      set(-w); buzz(15);
+      setTimeout(() => { li.style.height = li.offsetHeight + 'px'; requestAnimationFrame(() => { li.style.height = '0px'; li.style.opacity = 0; }); }, 200);
+      setTimeout(() => { busy = false; remove(r); }, 480);
+    } else { set(0); setTimeout(() => busy = false, 450); }
+    el.onclick = ev => ev.stopPropagation();
+    setTimeout(() => el.onclick = null, 50);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+let toastTimer;
+function remove(r) {
+  save({ ...r, deleted: true });
+  $('toastText').textContent = 'Deleted “' + r.text + '”';
+  $('toastBtn').onclick = () => { save({ ...r, deleted: false }); hideToast(); buzz(10); };
+  $('toast').classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 4500);
+}
+const hideToast = () => $('toast').classList.remove('on');
+
+// ---------- add sheet ----------
+let pick = null;   // chosen Date or null
+function chipTimes() {
+  const now = new Date(), c = [['No time', null]];
+  c.push(['In 1 hour', new Date(Math.ceil((+now + 36e5) / 3e5) * 3e5)]);
+  const eve = new Date(now); eve.setHours(now.getHours() < 18 ? 18 : 21, 0, 0, 0);
+  if (now.getHours() < 21) c.push([now.getHours() < 18 ? 'This evening' : 'Tonight', eve]);
+  const tm = dayStart(new Date(+now + 864e5)); tm.setHours(9);
+  c.push(['Tomorrow 9 AM', tm]);
+  return c;
+}
+function drawChips() {
+  const box = $('chips'); box.innerHTML = '';
+  let matched = false;
+  for (const [label, d] of chipTimes()) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = label;
+    const on = d === null ? pick === null : pick && +pick === +d;
+    if (on) { b.classList.add('on'); matched = true; }
+    b.onclick = () => { pick = d; buzz(6); drawChips(); };
+    box.append(b);
+  }
+  // Native iPhone date & time wheel, hidden under a chip.
+  const custom = document.createElement('label');
+  custom.className = 'chip' + (!matched && pick ? ' on' : '');
+  custom.textContent = !matched && pick ? whenText(pick) : 'Pick a time…';
+  const inp = document.createElement('input'); inp.type = 'datetime-local';
+  inp.onchange = () => { if (inp.value) { pick = new Date(inp.value); drawChips(); } };
+  custom.append(inp); box.append(custom);
+  $('when').textContent = pick ? 'Reminds you ' + (dayStart(pick) - dayStart() === 0 ? 'today at ' + clock(pick) : whenText(pick)) : 'Just a checklist item';
+}
+function openSheet() {
+  pick = null; $('newText').value = ''; $('addBtn').disabled = true; drawChips();
+  $('sheet').style.transform = '';
+  $('sheet').classList.add('on'); $('scrim').classList.add('on');
+  $('newText').focus();   // must happen inside the tap for the iPhone keyboard to open
+}
+function closeSheet() { $('sheet').style.transform = ''; $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); $('newText').blur(); }
+function addNew() {
+  const text = $('newText').value.trim();
+  if (!text) return;
+  save({ id: crypto.randomUUID().replace(/-/g, ''), text: text[0].toUpperCase() + text.slice(1),
+         due: pick ? pick.toISOString() : null, done: false, done_at: null, updated: Date.now(), deleted: false });
+  buzz(10); closeSheet();
+}
+$('newText').addEventListener('input', e => $('addBtn').disabled = !e.target.value.trim());
+$('newText').addEventListener('keydown', e => { if (e.key === 'Enter') addNew(); });
+
+// Drag the sheet's top bar down to dismiss (follows the finger, flick closes).
+(() => {
+  const s = $('sheet'), top = $('sheetTop'); let y0, dy, t0;
+  const startDrag = e => { if (e.target.closest('button')) return; y0 = e.clientY; dy = 0; t0 = e.timeStamp; s.style.transition = 'none'; top.setPointerCapture(e.pointerId); };
+  top.addEventListener('pointerdown', startDrag);
+  s.querySelector('.grab').addEventListener('pointerdown', startDrag);
+  top.addEventListener('pointermove', e => { if (y0 == null) return; dy = e.clientY - y0; s.style.transform = `translateY(${dy > 0 ? dy : dy / 6}px)`; });
+  top.addEventListener('pointerup', e => {
+    if (y0 == null) return; y0 = null; s.style.transition = '';
+    const v = dy / Math.max(1, e.timeStamp - t0) * 1000;
+    if (dy > 110 || v > 700) closeSheet(); else s.style.transform = '';
+  });
+})();
+
+// ---------- big title collapses into a glass bar ----------
+addEventListener('scroll', () => $('bar').classList.toggle('on', scrollY > 50), { passive: true });
+
+// ---------- setup ----------
+function saveSetup() {
+  cfg = { url: $('url').value.trim(), key: $('key').value.trim() };
+  if (!/^https:\/\/.+supabase\.co/.test(cfg.url) || cfg.key.length < 20) { status('Check the URL and key', true); return; }
+  store('rem-cfg', cfg);
+  $('setup').style.display = 'none'; $('fab').style.display = '';
+  load();
+}
+
+// ---------- splash: the Dynamic Island grows into the app ----------
+function splash() {
+  const sp = $('splash'), pill = sp.querySelector('.pill'), glow = sp.querySelector('.glow'),
+        tick = sp.querySelector('svg'), word = sp.querySelector('.word'), app = $('app');
+  const done = () => sp.remove();
+  if (reduce) { sp.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, delay: 150, fill: 'forwards' }).onfinish = done; return; }
+  const W = Math.min(innerWidth - 64, 300), H = 168, cy = innerHeight * .42 - H / 2;
+  const spring = 'cubic-bezier(.34,1.25,.64,1)';
+  pill.animate([
+    { width: '126px', height: '37px', marginLeft: '-63px', borderRadius: '19px', top: getComputedStyle(pill).top },
+    { width: W + 'px', height: H + 'px', marginLeft: -W / 2 + 'px', borderRadius: '40px', top: cy + 'px' },
+  ], { duration: 620, delay: 120, easing: spring, fill: 'forwards' });
+  glow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 260, fill: 'forwards' });
+  tick.animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 460, delay: 480, easing: 'cubic-bezier(.34,1.56,.64,1)', fill: 'forwards' });
+  word.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: 560, easing: 'ease-out', fill: 'forwards' });
+  app.animate([{ transform: 'scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 520, delay: 1050, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'backwards' });
+  sp.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, delay: 1000, fill: 'forwards' }).onfinish = done;
+  sp.onclick = () => { sp.getAnimations({ subtree: true }).forEach(a => a.finish()); app.getAnimations().forEach(a => a.finish()); };
+}
+
+render();
+splash();
+load();
+setInterval(load, 15000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
