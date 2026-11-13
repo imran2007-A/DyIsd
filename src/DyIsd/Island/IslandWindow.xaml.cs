@@ -68,6 +68,7 @@ public partial class IslandWindow : Window
             HwndSource.FromHwnd(Handle)?.AddHook(WndProc);
             _clickThrough.Tick += (_, _) => ClickThrough();
             _clickThrough.Start();
+            StartDrawCheck();
         };
         SystemEvents.DisplaySettingsChanged += (_, _) => Dispatcher.BeginInvoke(() => ApplyPosition(SettingsStore.Current.Position));
 
