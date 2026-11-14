@@ -85,19 +85,18 @@ public sealed class CommandRunner
         return new Reply("\uE783", "Orange", $"{name}: {done} of {total} done · {failed[0]} didn't work", Failed: done == 0);
     }
 
-    /// <summary>"End Claude mode": closes the apps the mode opened and pauses the music.</summary>
+    /// <summary>"End Claude mode": pauses its music, and (if the mode says so) closes the apps it opened.</summary>
     public async Task<Reply> EndModeAsync(JarvisMode mode)
     {
         string name = ModeTitle(mode.Name);
-        if (!mode.CloseOnEnd) return Ok("\uE73E", $"{name} off");
         int closed = 0;
-        foreach (var step in mode.Steps.Where(s => s.Kind == "open"))
+        foreach (var step in mode.Steps.Where(s => s.Kind == "open" && mode.CloseOnEnd))
         {
             var t = step.Value.Trim();
             if (SitesMap.ContainsKey(t) || t.Contains('.')) continue; // websites stay: it's your browser
             if (!CloseApp(t).Failed) closed++;
         }
-        if (_app.Media.State.IsPlaying && mode.Steps.Any(s => s.Kind is "playlist" or "song" or "youtube"))
+        if (_app.Media.State.IsPlaying && mode.Steps.Any(s => s.Kind is "playlist" or "song" or "youtube" or "library"))
             await _app.Media.TogglePlayPauseAsync();
         if (mode.Steps.Any(s => s.Kind == "focus") && _app.Timer.IsActive) _app.Timer.End();
         return Ok("\uE73E", closed > 0 ? $"{name} off · closed {closed} app{(closed == 1 ? "" : "s")}" : $"{name} off");

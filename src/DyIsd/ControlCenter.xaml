@@ -319,7 +319,7 @@
                             <TextBlock x:Name="StepError" Style="{StaticResource Sub}" Foreground="{DynamicResource Orange}" Margin="2,6,0,0" Visibility="Collapsed"/>
                             <DockPanel Margin="2,12,0,0">
                                 <ToggleButton x:Name="ModeCloseOnEnd" DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="True" VerticalAlignment="Center"/>
-                                <TextBlock Text="&#x201C;End &#x2026;&#x201D; closes its apps and pauses the music" Style="{StaticResource Sub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,10,0"/>
+                                <TextBlock Text="&#x201C;End &#x2026;&#x201D; also closes its apps (its music always pauses)" Style="{StaticResource Sub}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,10,0"/>
                             </DockPanel>
                             <UniformGrid Columns="2" Margin="0,12,0,0">
                                 <Button Style="{StaticResource Btn}" Content="Cancel" Margin="0,0,4,0" Click="ModeCancel_Click"/>

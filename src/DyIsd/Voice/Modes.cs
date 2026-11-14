@@ -20,6 +20,7 @@ public static class Modes
         new("open", "Open app / site", "Claude, VS Code, leetcode.com…", "\uE8A7"),
         new("playlist", "Apple Music playlist", "Playlist name, e.g. Chill Vibes", "\uE93C"),
         new("song", "Apple Music song", "Song name, e.g. Believer", "\uE8D6"),
+        new("library", "My Apple Music songs", "shuffle or in order", "\uE8B1"),
         new("youtube", "Play on YouTube", "What to play, e.g. lofi hip hop", "\uE768"),
         new("volume", "Volume", "0 – 100", "\uE767"),
         new("brightness", "Brightness", "0 – 100", "\uE706"),
@@ -41,6 +42,7 @@ public static class Modes
         "open" => $"Open {s.Value}",
         "playlist" => $"Play playlist “{s.Value}”",
         "song" => $"Play “{s.Value}” on Apple Music",
+        "library" => Shuffled(s.Value) ? "Shuffle my Apple Music songs" : "Play my Apple Music songs",
         "youtube" => $"Play “{s.Value}” on YouTube",
         "volume" => $"Volume {s.Value}",
         "brightness" => $"Brightness {s.Value}",
@@ -53,6 +55,8 @@ public static class Modes
         "close" => $"Close {s.Value}",
         _ => $"“{s.Value}”",
     };
+
+    static bool Shuffled(string v) => !v.Trim().StartsWith("in order", StringComparison.OrdinalIgnoreCase) && !v.Trim().Equals("order", StringComparison.OrdinalIgnoreCase);
 
     static string Cap(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
@@ -71,6 +75,8 @@ public static class Modes
                 return CommandParser.Number(value) is >= 1 and <= 120 ? null : "Use seconds, 1 to 120";
             case "theme":
                 return value.ToLowerInvariant() is "dark" or "light" ? null : "Type dark or light";
+            case "library":
+                return value.ToLowerInvariant() is "shuffle" or "shuffled" or "in order" or "order" ? null : "Type shuffle or in order";
             case "wifi" or "bluetooth":
                 return value.ToLowerInvariant() is "on" or "off" ? null : "Type on or off";
         }
@@ -88,6 +94,7 @@ public static class Modes
             "close" => new() { new Cmd("close-app", v) },
             "playlist" => new() { new Cmd("applemusic-playlist", v) },
             "song" => new() { new Cmd("applemusic", v) },
+            "library" => new() { new Cmd("am-library", N: Shuffled(v) ? 1 : 0) },
             "youtube" => new() { new Cmd("yt-play", v, Say: "YouTube · " + v) },
             "volume" => new() { new Cmd("volume-set", N: Math.Clamp(n, 0, 100)) },
             "brightness" => new() { new Cmd("brightness-set", N: Math.Clamp(n, 0, 100)) },

@@ -125,8 +125,9 @@ any combination:
 | Any Jarvis command | anything you'd say: "ask claude to plan my day", "message Rahul saying I'm studying" |
 
 Run it by saying its name ("Claude mode", "start Claude mode") or with ▶ next to it, no voice
-needed. "End Claude mode" closes the apps it opened and pauses the music (switch that off per
-mode). Steps run in order; one that fails is skipped and the island says which. WhatsApp
+needed. "End Claude mode" pauses its music and closes the apps it opened (closing can be
+switched off per mode). A step can be "My Apple Music songs" (shuffled or in order), e.g. open
+Claude → shuffle my songs → open Claude. Steps run in order; one that fails is skipped and the island says which. WhatsApp
 messages and calls inside a mode never send without your yes, so they're skipped in a mode.
 
 ### AI brain (optional, free)

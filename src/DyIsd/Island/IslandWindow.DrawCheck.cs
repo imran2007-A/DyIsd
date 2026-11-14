@@ -39,7 +39,16 @@ public partial class IslandWindow
         var h = new WindowInteropHelper(this).Handle;
         var p = Pill.PointToScreen(new Point(5, Pill.ActualHeight / 2)); // just inside the left edge
         int x = (int)p.X, y = (int)p.Y;
-        if (h == IntPtr.Zero || CoveredAt(h, x, y)) { _blankChecks = 0; return; }
+        if (h == IntPtr.Zero) return;
+        // Pushed behind another app's window: come back to the front (and say who it was).
+        if (CoveredAt(h, x, y) is { } cover)
+        {
+            _blankChecks = 0;
+            if (cover != _lastCover) { _lastCover = cover; Log.Write($"island: was behind {cover}, bringing it back to the front"); }
+            EnsureTopmost();
+            return;
+        }
+        _lastCover = null;
 
         var dc = GetDC(IntPtr.Zero);
         uint px = GetPixel(dc, x, y);
@@ -63,17 +72,29 @@ public partial class IslandWindow
         EnsureTopmost();
     }
 
-    /// <summary>Another visible window above ours covers this point (then the pixel says nothing about us).</summary>
-    static bool CoveredAt(IntPtr self, int x, int y)
+    string? _lastCover;
+
+    /// <summary>
+    /// The app whose window sits above ours at this point, or null. See-through, click-through
+    /// overlays (like Claude's full-screen one) don't count: the island still shows through them.
+    /// </summary>
+    static string? CoveredAt(IntPtr self, int x, int y)
     {
         for (var w = GetWindow(self, 3 /* GW_HWNDPREV */); w != IntPtr.Zero; w = GetWindow(w, 3))
         {
             if (!IsWindowVisible(w) || !GetWindowRect(w, out var rc)) continue;
             if (DwmGetWindowAttribute(w, 14 /* DWMWA_CLOAKED */, out int cloaked, 4) == 0 && cloaked != 0) continue;
-            if (x >= rc.L && x < rc.R && y >= rc.T && y < rc.B) return true;
+            int ex = GetWindowLong(w, -20);
+            if ((ex & 0x80000) != 0 && (ex & 0x20) != 0) continue; // WS_EX_LAYERED + WS_EX_TRANSPARENT
+            if (x < rc.L || x >= rc.R || y < rc.T || y >= rc.B) continue;
+            GetWindowThreadProcessId(w, out uint pid);
+            try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return "another window"; }
         }
-        return false;
+        return null;
     }
+
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 
     struct RECT { public int L, T, R, B; }
     [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
